@@ -1,6 +1,7 @@
 FROM wordpress:php8.2-apache
+RUN a2dismod mpm_event >/dev/null 2>&1 || true \
+  && a2enmod mpm_prefork >/dev/null 2>&1 || true
 
-# Copie le theme enfant dans l'image
 COPY wp-content/themes/extendable-child /var/www/html/wp-content/themes/extendable-child
 
 # Si des plugins specifiques sont versionnes dans le repo, decommentez :
