@@ -1,4 +1,10 @@
 #!/bin/sh
 set -e
-php-fpm -D
-nginx -g "daemon off;"
+
+docker-entrypoint.sh php-fpm -D &
+
+until [ -f /var/www/html/index.php ]; do
+  sleep 1
+  done
+
+  nginx -g "daemon off;"
