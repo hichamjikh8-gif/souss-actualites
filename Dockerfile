@@ -1,7 +1,8 @@
 FROM wordpress:php8.2-apache
-RUN a2dismod mpm_event >/dev/null 2>&1 || true \
-  && a2enmod mpm_prefork >/dev/null 2>&1 || true
-
+RUN rm -f /etc/apache2/mods-enabled/mpm_event.load /etc/apache2/mods-enabled/mpm_event.conf /etc/apache2/mods-enabled/mpm_worker.load /etc/apache2/mods-enabled/mpm_worker.conf \
+ && ln -sf ../mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load \
+ && ln -sf ../mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf \
+ && apache2ctl -M
 COPY wp-content/themes/extendable-child /var/www/html/wp-content/themes/extendable-child
 
 # Si des plugins specifiques sont versionnes dans le repo, decommentez :
