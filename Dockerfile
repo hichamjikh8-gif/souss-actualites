@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y nginx unzip && rm -rf /var/lib/apt/list
 COPY nginx.conf /etc/nginx/sites-available/default
 
 COPY wp-content/themes/extendable-child /var/www/html/wp-content/themes/extendable-child
+COPY wp-content/mu-plugins /var/www/html/wp-content/mu-plugins
 
 # Telecharger le theme parent extendable et les 4 plugins depuis WordPress.org
 RUN curl -L "https://downloads.wordpress.org/theme/extendable.latest-stable.zip" -o /tmp/extendable.zip \
