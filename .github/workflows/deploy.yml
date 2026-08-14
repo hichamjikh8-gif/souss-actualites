@@ -21,6 +21,7 @@ jobs:
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: 28200222-6216-4488-8cd5-3c2a6b772855
         run: |
           railway up \
             --service ${{ secrets.RAILWAY_SERVICE_ID }} \
