@@ -1,8 +1,10 @@
 name: Deploy to Railway
 
+
 on:
   push:
     branches: [ main ]
+
 
 jobs:
   deploy:
@@ -10,12 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
       - name: Install Railway CLI
         run: npm install -g @railway/cli --silent
+
 
       - name: Deploy to Railway
         env:
@@ -23,8 +28,8 @@ jobs:
         run: |
           railway up \
             --service ${{ secrets.RAILWAY_SERVICE_ID }} \
-            --detach \
-            --no-verbose
+            --detach
+
 
       - name: Healthcheck post-deploiement
         run: |
@@ -34,4 +39,3 @@ jobs:
           if [ "$HTTP" != "200" ] && [ "$HTTP" != "302" ]; then
             echo "::warning::Site non joignable - verifier Railway"
           fi
-# trigger-run-24
