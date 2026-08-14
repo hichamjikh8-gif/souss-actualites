@@ -34,3 +34,4 @@ jobs:
           if [ "$HTTP" != "200" ] && [ "$HTTP" != "302" ]; then
             echo "::warning::Site non joignable - verifier Railway"
           fi
+# trigger-run-24
