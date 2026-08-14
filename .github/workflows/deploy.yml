@@ -6,20 +6,31 @@ on:
 
 jobs:
   deploy:
+    name: Deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Link Railway project
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
+        run: npm install -g @railway/cli --silent
 
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --detach
+        run: |
+          railway up \
+            --service ${{ secrets.RAILWAY_SERVICE_ID }} \
+            --detach \
+            --no-verbose
+
+      - name: Healthcheck post-deploiement
+        run: |
+          sleep 60
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://souss-actualites.com/wp-login.php 2>/dev/null || echo "000")
+          echo "HTTP: $HTTP"
+          if [ "$HTTP" != "200" ] && [ "$HTTP" != "302" ]; then
+            echo "::warning::Site non joignable - verifier Railway"
+          fi
