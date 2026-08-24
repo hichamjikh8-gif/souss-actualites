@@ -1,0 +1,12 @@
+[
+    {
+          "relation": ["delegate_permission/common.handle_all_urls"],
+          "target": {
+                  "namespace": "android_app",
+                  "package_name": "com.soussactualites.app",
+                  "sha256_cert_fingerprints": [
+                            "E8:BA:FE:17:A4:41:0F:42:A0:48:B2:70:A7:1E:D2:8D:AB:AC:87:8C:A0:BE:1F:3C:C2:D0:FB:CF:2F:02:21:6C"
+                  ]
+          }
+    }
+]
