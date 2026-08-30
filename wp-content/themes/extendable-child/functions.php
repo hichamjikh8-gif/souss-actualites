@@ -11,7 +11,7 @@ add_action( 'wp_enqueue_scripts', function () {
                 'souss-actualites-footer',
                 get_stylesheet_directory_uri() . '/assets/css/footer.css',
                 array( 'extendable-parent-style' ),
-                '1.0'
+                filemtime( get_stylesheet_directory() . '/assets/css/footer.css' )
             );
 } );
 
