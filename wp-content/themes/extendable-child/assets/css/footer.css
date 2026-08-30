@@ -94,9 +94,13 @@
 }
 
 @media (max-width: 767px) {
-	/* Le logo du header suffit sur mobile ; celui du footer fait doublon en bas de page. */
-	.sa-footer__logo {
-		display: none;
+	/* Le logo du header suffit sur mobile ; celui du footer fait doublon en bas de page.
+	   !important + double classe requis : une regle globale preexistante
+	   (#global-styles-inline-css) cible deja .wp-block-site-logo avec !important
+	   et gagnerait sinon sur ce meme element (il porte les deux classes). */
+	.sa-footer .wp-block-site-logo.sa-footer__logo,
+	footer .sa-footer__logo.wp-block-site-logo {
+		display: none !important;
 	}
 }
 
