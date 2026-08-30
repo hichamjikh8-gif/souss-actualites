@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { makeTelegramClient } = require('./lib/telegram');
 const { makeWpBotApi } = require('./lib/wpBotApi');
+const { makeAgent } = require('./lib/agent');
 
 const PORT = process.env.PORT || 3000;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -10,8 +11,11 @@ const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID ? String(process.env.ADM
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const WP_BASE_URL = process.env.WP_BASE_URL || 'https://souss-actualites.com';
 const BOT_API_SECRET = process.env.BOT_API_SECRET;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const FAL_KEY = process.env.FAL_KEY;
 const UPTIME_CHECK_INTERVAL_MS = parseInt(process.env.UPTIME_CHECK_INTERVAL_MS || '300000', 10);
 const MODERATION_CHECK_INTERVAL_MS = parseInt(process.env.MODERATION_CHECK_INTERVAL_MS || '300000', 10);
+const KNOWN_COMMANDS = ['/start', '/help', '/stats', '/drafts', '/comments', '/publish', '/new'];
 
 const SEEN_COMMENTS_FILE = path.join(__dirname, 'seen-comments.json');
 
@@ -20,6 +24,10 @@ app.use(express.json());
 
 const telegram = TELEGRAM_BOT_TOKEN ? makeTelegramClient(TELEGRAM_BOT_TOKEN) : null;
 const wpApi = BOT_API_SECRET ? makeWpBotApi(WP_BASE_URL, BOT_API_SECRET) : null;
+const agent =
+    ANTHROPIC_API_KEY && telegram && wpApi
+        ? makeAgent({ anthropicApiKey: ANTHROPIC_API_KEY, telegram, wpApi, falKey: FAL_KEY })
+        : null;
 
 function loadSeenComments() {
     try {
@@ -72,7 +80,7 @@ function formatPendingComments(comments) {
 }
 
 const HELP_TEXT = [
-    'Commandes disponibles :',
+    'Podés hablarme en lenguaje natural (buscar noticias, escribir un artículo, generar una imagen, publicar) o usar estos comandos rápidos :',
     '/stats — statistiques du site',
     '/drafts — liste des brouillons',
     '/publish <id> — publier un brouillon',
@@ -82,9 +90,34 @@ const HELP_TEXT = [
 ].join('\n');
 
 async function handleCommand(chatId, text) {
-    const [cmdRaw] = text.trim().split(/\s+/);
+    const trimmed = text.trim();
+    const [cmdRaw] = trimmed.split(/\s+/);
     const cmd = cmdRaw.toLowerCase();
     const argText = text.slice(cmdRaw.length).trim();
+    const isSlashCommand = trimmed.startsWith('/');
+
+    if (isSlashCommand && !KNOWN_COMMANDS.includes(cmd)) {
+        await telegram.sendMessage(chatId, `Commande inconnue.\n\n${HELP_TEXT}`);
+        return;
+    }
+
+    if (!isSlashCommand) {
+        if (!agent) {
+            await telegram.sendMessage(
+                chatId,
+                "El asistente conversacional no está configurado todavía (falta ANTHROPIC_API_KEY, o BOT_API_SECRET/TELEGRAM_BOT_TOKEN)."
+            );
+            return;
+        }
+        try {
+            const reply = await agent.handleMessage(chatId, text);
+            await telegram.sendMessage(chatId, reply);
+        } catch (err) {
+            console.error('Erreur agent conversationnel:', err.message);
+            await telegram.sendMessage(chatId, `Error: ${err.message}`);
+        }
+        return;
+    }
 
     if (!wpApi) {
         await telegram.sendMessage(chatId, "Le bot n'est pas relié à l'API du site (BOT_API_SECRET manquant).");
