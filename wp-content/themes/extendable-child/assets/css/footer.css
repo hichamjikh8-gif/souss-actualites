@@ -2,6 +2,8 @@
 
 .sa-footer {
 	font-family: inherit;
+	background-color: #0b1220 !important;
+	color: #e9e4d8 !important;
 }
 
 .sa-footer__logo img {
