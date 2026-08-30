@@ -81,12 +81,15 @@
 	margin: 0 !important;
 }
 
-.sa-footer__legal-nav .wp-block-navigation-item__content {
-	opacity: 0.7;
-	font-size: 13px;
+.sa-footer__legal-nav {
+	margin: 0 !important;
 }
 
-.sa-footer__legal-nav .wp-block-navigation-item__content:hover {
+.sa-footer__legal-nav a {
+	opacity: 0.7;
+}
+
+.sa-footer__legal-nav a:hover {
 	opacity: 1;
 }
 
