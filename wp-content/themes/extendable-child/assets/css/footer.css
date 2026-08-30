@@ -1,0 +1,104 @@
+/* Styles du pied de page uniquement (Souss Actualites). */
+
+.sa-footer {
+	font-family: inherit;
+}
+
+.sa-footer__logo img {
+	max-height: 64px;
+	width: auto;
+	filter: brightness(0) invert(1);
+	opacity: 0.95;
+}
+
+.sa-footer__tagline {
+	margin-top: 12px;
+	opacity: 0.7;
+	letter-spacing: 0.02em;
+}
+
+.sa-footer__rule {
+	border-top-color: rgba(233, 228, 216, 0.18) !important;
+	margin-top: 32px;
+	margin-bottom: 32px;
+}
+
+.sa-footer__columns {
+	gap: 32px;
+}
+
+.sa-footer__heading {
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	opacity: 0.55;
+	margin-bottom: 14px !important;
+	font-weight: 600;
+}
+
+.sa-footer__list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.sa-footer__list li {
+	margin: 0 0 10px;
+}
+
+.sa-footer__list a,
+.sa-footer__bottom a {
+	color: #e9e4d8;
+	text-decoration: none;
+	opacity: 0.85;
+	transition: opacity 0.15s ease;
+}
+
+.sa-footer__list a:hover,
+.sa-footer__bottom a:hover {
+	opacity: 1;
+	text-decoration: underline;
+}
+
+.sa-footer__social,
+.sa-footer__social a,
+.sa-footer__social .wp-social-link {
+	--wp--style--color--icon-color: #e9e4d8;
+	color: #e9e4d8;
+}
+
+.sa-footer__social svg {
+	fill: currentColor;
+}
+
+.sa-footer__bottom {
+	padding-bottom: 28px;
+	align-items: center;
+}
+
+.sa-footer__copyright {
+	opacity: 0.55;
+	margin: 0 !important;
+}
+
+.sa-footer__legal-nav .wp-block-navigation-item__content {
+	opacity: 0.7;
+	font-size: 13px;
+}
+
+.sa-footer__legal-nav .wp-block-navigation-item__content:hover {
+	opacity: 1;
+}
+
+@media (max-width: 782px) {
+	.sa-footer__columns {
+		flex-wrap: wrap;
+	}
+	.sa-footer__columns .wp-block-column {
+		min-width: 45%;
+	}
+	.sa-footer__bottom {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+	}
+}

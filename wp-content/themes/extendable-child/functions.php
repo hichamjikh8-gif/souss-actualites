@@ -5,6 +5,14 @@ add_action( 'wp_enqueue_scripts', function () {
                 'extendable-parent-style',
                 get_template_directory_uri() . '/style.css'
             );
+
+      // Styles du footer uniquement (redesign Souss Actualites)
+      wp_enqueue_style(
+                'souss-actualites-footer',
+                get_stylesheet_directory_uri() . '/assets/css/footer.css',
+                array( 'extendable-parent-style' ),
+                '1.0'
+            );
 } );
 
 // Schema NewsArticle (JSON-LD) + Open Graph pour Google Discover
