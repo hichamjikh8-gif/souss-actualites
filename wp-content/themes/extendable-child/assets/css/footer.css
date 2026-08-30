@@ -93,6 +93,13 @@
 	opacity: 1;
 }
 
+@media (max-width: 767px) {
+	/* Le logo du header suffit sur mobile ; celui du footer fait doublon en bas de page. */
+	.sa-footer__logo {
+		display: none;
+	}
+}
+
 @media (max-width: 782px) {
 	.sa-footer__columns {
 		flex-wrap: wrap;
