@@ -8,6 +8,7 @@ const parser = new Parser();
 const FEED_URL = process.env.RSS_FEED_URL || 'https://souss-actualites.com/feed/';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '@soussactualites_bot';
+const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const CHECK_INTERVAL_MS = parseInt(process.env.CHECK_INTERVAL_MS || '300000', 10); // 5 minutes
 
 const SEEN_FILE = path.join(__dirname, 'seen.json');
@@ -55,6 +56,19 @@ async function sendTelegramMessage(item) {
     }
 }
 
+async function alertAdmin(text) {
+    if (!TELEGRAM_BOT_TOKEN || !ADMIN_TELEGRAM_ID) return;
+    try {
+        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: ADMIN_TELEGRAM_ID, text }),
+        });
+    } catch (err) {
+        console.error('Echec envoi alerte admin:', err.message);
+    }
+}
+
 async function checkFeed() {
     if (!TELEGRAM_BOT_TOKEN) {
           console.error('TELEGRAM_BOT_TOKEN manquant. Ajoutez cette variable d\'environnement dans Railway.');
@@ -74,6 +88,7 @@ async function checkFeed() {
                         console.log(`Article envoye: ${item.title}`);
               } catch (sendErr) {
                         console.error(`Echec envoi pour "${item.title}":`, sendErr.message);
+                        await alertAdmin(`⚠️ Échec d'envoi Telegram pour l'article "${item.title}" : ${sendErr.message}`);
               }
       }
 
