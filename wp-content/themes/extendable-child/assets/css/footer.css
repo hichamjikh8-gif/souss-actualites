@@ -9,8 +9,7 @@
 .sa-footer__logo img {
 	max-height: 64px;
 	width: auto;
-	filter: brightness(0) invert(1);
-	opacity: 0.95;
+	border-radius: 6px;
 }
 
 .sa-footer__tagline {
