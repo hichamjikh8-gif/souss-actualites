@@ -24,7 +24,10 @@ RUN curl -L "https://downloads.wordpress.org/theme/extendable.latest-stable.zip"
     && rm /tmp/wf.zip \
     && curl -L "https://downloads.wordpress.org/plugin/wp-super-cache.latest-stable.zip" -o /tmp/wsc.zip \
     && unzip -q /tmp/wsc.zip -d /var/www/html/wp-content/plugins/ \
-    && rm /tmp/wsc.zip
+    && rm /tmp/wsc.zip \
+        && curl -L "https://downloads.wordpress.org/plugin/polylang.latest-stable.zip" -o /tmp/pll.zip \
+            && unzip -q /tmp/pll.zip -d /var/www/html/wp-content/plugins/ \
+                && rm /tmp/pll.zip
 
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
