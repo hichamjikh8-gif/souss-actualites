@@ -10,3 +10,5 @@ until [ -f /var/www/html/index.php ]; do
 mkdir -p /var/www/html/wp-content/uploads
 chmod -R 777 /var/www/html/wp-content/uploads
   nginx -g "daemon off;"
+
+# rebuild trigger
