@@ -13,7 +13,10 @@ COPY wp-content/mu-plugins /var/www/html/wp-content/mu-plugins
 RUN mkdir -p /var/www/html/.well-known
 COPY .well-known/assetlinks.json /var/www/html/.well-known/assetlinks.json
 
-# Telecharger le theme parent extendable et les 4 plugins depuis WordPress.org
+# Telecharger le theme parent extendable et les 4 plugins depuis WordPress.org.
+# NB: "WP to Social Agency" (nextscripts-snap) est installe via WP-CLI au
+# demarrage du conteneur (voir /cleanup-wordfence.sh), car WP-CLI exige un
+# WordPress bootstrappe qui n'existe pas encore pendant le build.
 RUN curl -L "https://downloads.wordpress.org/theme/extendable.latest-stable.zip" -o /tmp/extendable.zip \
     && unzip -q /tmp/extendable.zip -d /var/www/html/wp-content/themes/ \
     && rm /tmp/extendable.zip \
