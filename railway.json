@@ -5,7 +5,8 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "/cleanup-wordfence.sh",
+    "startCommand": "/start.sh",
+    "preDeployCommand": null,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
