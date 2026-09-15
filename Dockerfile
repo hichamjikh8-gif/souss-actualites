@@ -13,6 +13,15 @@ COPY wp-content/mu-plugins /var/www/html/wp-content/mu-plugins
 RUN mkdir -p /var/www/html/.well-known
 COPY .well-known/assetlinks.json /var/www/html/.well-known/assetlinks.json
 
+# robots.txt physique : nginx le sert directement (sinon WordPress renvoie un
+# robots.txt virtuel, ce qui generait un 404 avant le bootstrappage du site).
+COPY robots.txt /var/www/html/robots.txt
+
+# robots.txt physique : nginx le sert sans passer par WordPress, ce qui evite
+# le 404 actuel (WP sert souvent un robots.txt virtuel, mais pas dans cette
+# config nginx+php-fpm). Le bloc Sitemap pointe vers le sitemap Rank Math.
+COPY robots.txt /var/www/html/robots.txt
+
 # Telecharger le theme parent extendable et les 4 plugins depuis WordPress.org.
 # NB: "WP to Social Agency" (nextscripts-snap) est installe via WP-CLI au
 # demarrage du conteneur (voir /cleanup-wordfence.sh), car WP-CLI exige un

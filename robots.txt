@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://souss-actualites.com/sitemap_index.xml
