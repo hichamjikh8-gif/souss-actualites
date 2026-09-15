@@ -97,7 +97,7 @@ add_action( 'wp_body_open', function () {
 	}
 
 	$latest = get_posts( array(
-		'numberposts'      => 1,
+		'numberposts'      => 8,
 		'post_status'      => 'publish',
 		'orderby'          => 'date',
 		'order'            => 'DESC',
@@ -108,14 +108,24 @@ add_action( 'wp_body_open', function () {
 		return;
 	}
 
-	$post = $latest[0];
-	$url  = get_permalink( $post );
-	$item = '<li class="sa-breaking-news-item"><a href="' . esc_url( $url ) . '">' . esc_html( get_the_title( $post ) ) . '</a></li>';
+	$items = '';
+	foreach ( $latest as $post ) {
+		$url    = get_permalink( $post );
+		$title  = get_the_title( $post );
+		if ( '' === $title || '' === $url || false === $url ) {
+			continue;
+		}
+		$items .= '<li class="sa-breaking-news-item"><a href="' . esc_url( $url ) . '">' . esc_html( $title ) . '</a></li>';
+	}
+
+	if ( '' === $items ) {
+		return;
+	}
 
 	echo '<div class="sa-breaking-news" role="region" aria-label="Breaking news">' . "\n";
 	echo '  <span class="sa-breaking-news-label">BREAKING NEWS</span>' . "\n";
 	echo '  <div class="sa-breaking-news-track">' . "\n";
-	echo '    <ul>' . $item . $item . '</ul>' . "\n";
+	echo '    <ul>' . $items . '</ul>' . "\n";
 	echo '  </div>' . "\n";
 	echo '</div>' . "\n";
 } );
