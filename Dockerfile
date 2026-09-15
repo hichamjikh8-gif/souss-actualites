@@ -2,6 +2,10 @@ FROM wordpress:php8.2-fpm
 
 RUN apt-get update && apt-get install -y nginx unzip && rm -rf /var/lib/apt/lists/*
 
+# WP-CLI is required by cleanup-wordfence.sh to run database maintenance queries
+RUN curl -L "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar" -o /usr/local/bin/wp \
+    && chmod +x /usr/local/bin/wp
+
 COPY nginx.conf /etc/nginx/sites-available/default
 
 COPY wp-content/themes/extendable-child /var/www/html/wp-content/themes/extendable-child
@@ -30,11 +34,12 @@ RUN curl -L "https://downloads.wordpress.org/theme/extendable.latest-stable.zip"
                 && rm /tmp/pll.zip
 
 COPY start.sh /start.sh
-RUN chmod +x /start.sh
+COPY cleanup-wordfence.sh /cleanup-wordfence.sh
+RUN chmod +x /start.sh /cleanup-wordfence.sh
 
 # wp-content/uploads doit rester sur un volume persistant Railway,
 # ne pas le copier dans l'image (sinon perte des medias a chaque redeploiement)
 
 EXPOSE 80
 
-CMD ["/start.sh"]
+ENTRYPOINT ["/cleanup-wordfence.sh"]
