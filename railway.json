@@ -6,8 +6,7 @@
   },
   "deploy": {
     "startCommand": "/start.sh",
-    "preDeployCommand": "php -r \"try { \\$pdo = new PDO('mysql:host='.getenv('WORDPRESS_DB_HOST').';dbname='.getenv('WORDPRESS_DB_NAME'), getenv('WORDPRESS_DB_USER'), getenv('WORDPRESS_DB_PASSWORD')); \\$n = \\$pdo->exec(\\\"DELETE FROM wp_options WHERE option_name LIKE 'wf\\_%'\\\"); echo 'Deleted rows: '.\\$n.PHP_EOL; } catch(Exception \\$e) { echo 'Error: '.\\$e->getMessage().PHP_EOL; }\"",
-    "preDeployTimeoutSeconds": 30,
+    "preDeployCommand": null,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
