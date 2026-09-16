@@ -88,5 +88,23 @@
     "publish_to_sa": true,
     "filter_languages": true,
     "note": "Goal.com version arabe : transferts, grandes competitions europeennes, equipes nationales africaines. Couvre beaucoup les Lions de l'Atlas."
+  },
+  {
+    "name": "FilGoal",
+    "url": "https://www.filgoal.com/feed/",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Reference absolue du football arabe — premier a publier les infos mercato, compositions, resultats. Tres suivi au Maghreb. Couvre intensement les joueurs marocains en Europe et la selection nationale."
+  },
+  {
+    "name": "Yalla Kora",
+    "url": "https://www.yallakora.com/feed/",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Grand portail sport arabe (Egypte/Maghreb) : breaking news football, transferts en temps reel, couverture Lions de l'Atlas, Botola, Champions League, World Cup. Parmi les plus rapides en arabe."
   }
 ]
