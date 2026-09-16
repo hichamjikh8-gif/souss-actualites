@@ -45,6 +45,10 @@ function sa_event_allowed_category() {
 	return array( 'local', 'national', 'international' );
 }
 
+function sa_event_allowed_channels() {
+	return array( 'facebook', 'x', 'telegram', 'newsletter' );
+}
+
 /* -------------------------------- TABLES ---------------------------------- */
 
 function sa_event_table_events() {
@@ -62,13 +66,31 @@ function sa_event_table_log() {
 	return $wpdb->prefix . 'sa_event_log';
 }
 
+function sa_event_table_social() {
+	global $wpdb;
+	return $wpdb->prefix . 'sa_event_social_posts';
+}
+
 function sa_event_maybe_create_tables() {
 	global $wpdb;
 	$version = (int) get_option( 'sa_event_engine_db_version' );
-	if ( $version >= 1 ) {
-		return;
-	}
 	$charset = $wpdb->get_charset_collate();
+
+	if ( $version < 1 ) {
+		sa_event_create_tables_v1( $charset );
+		update_option( 'sa_event_engine_db_version', 1 );
+		$version = 1;
+	}
+
+	if ( $version < 2 ) {
+		sa_event_create_tables_v2( $charset );
+		update_option( 'sa_event_engine_db_version', 2 );
+		$version = 2;
+	}
+}
+
+function sa_event_create_tables_v1( $charset ) {
+	global $wpdb;
 	$events  = sa_event_table_events();
 	$sources = sa_event_table_sources();
 	$log     = sa_event_table_log();
@@ -123,7 +145,25 @@ function sa_event_maybe_create_tables() {
 		) {$charset}"
 	);
 
-	update_option( 'sa_event_engine_db_version', 1 );
+}
+
+function sa_event_create_tables_v2( $charset ) {
+	global $wpdb;
+	$social = sa_event_table_social();
+
+	$wpdb->query(
+		"CREATE TABLE IF NOT EXISTS {$social} (
+			id BIGINT(20) NOT NULL AUTO_INCREMENT,
+			event_id BIGINT(20) NOT NULL,
+			channel VARCHAR(20) NOT NULL,
+			content TEXT NOT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'draft',
+			created_by VARCHAR(100) NOT NULL DEFAULT 'agent',
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			KEY event_id (event_id)
+		) {$charset}"
+	);
 }
 add_action( 'init', 'sa_event_maybe_create_tables' );
 
@@ -224,6 +264,41 @@ function sa_event_add_source_row( $event_id, $url, $source_name, $title, $excerp
 		'added_at'    => current_time( 'mysql' ),
 	), array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' ) );
 	return (int) $wpdb->insert_id;
+}
+
+/**
+ * Enregistre un texte pret pour un canal social (Facebook/X/Telegram/newsletter).
+ * N'envoie jamais rien : c'est une preparation, la publication reelle sur le
+ * reseau est manuelle (aucune API Facebook/X n'est connectee a ce projet).
+ */
+function sa_event_social_add( $event_id, $channel, $content, $created_by ) {
+	global $wpdb;
+	$wpdb->insert( sa_event_table_social(), array(
+		'event_id'   => (int) $event_id,
+		'channel'    => sanitize_key( $channel ),
+		'content'    => wp_kses_post( (string) $content ),
+		'status'     => 'draft',
+		'created_by' => sanitize_text_field( (string) $created_by ),
+		'created_at' => current_time( 'mysql' ),
+	), array( '%d', '%s', '%s', '%s', '%s', '%s' ) );
+	return (int) $wpdb->insert_id;
+}
+
+function sa_event_social_list( $event_id ) {
+	global $wpdb;
+	return $wpdb->get_results( $wpdb->prepare(
+		"SELECT * FROM " . sa_event_table_social() . " WHERE event_id = %d ORDER BY created_at DESC",
+		(int) $event_id
+	) );
+}
+
+function sa_event_social_mark_posted( $id ) {
+	global $wpdb;
+	return $wpdb->update( sa_event_table_social(),
+		array( 'status' => 'posted_manually' ),
+		array( 'id' => (int) $id ),
+		array( '%s' ), array( '%d' )
+	);
 }
 
 /**
@@ -340,6 +415,16 @@ add_action( 'rest_api_init', function () {
 					'created_at' => $l->created_at,
 				);
 			}, sa_event_get_log( $row->id ) );
+			$out['social_posts'] = array_map( function ( $p ) {
+				return array(
+					'id'         => (int) $p->id,
+					'channel'    => $p->channel,
+					'content'    => $p->content,
+					'status'     => $p->status,
+					'created_by' => $p->created_by,
+					'created_at' => $p->created_at,
+				);
+			}, sa_event_social_list( $row->id ) );
 		}
 		return $out;
 	};
@@ -656,6 +741,50 @@ add_action( 'rest_api_init', function () {
 			return sa_event_promote_to_article( $event_key, $actor );
 		},
 	) );
+
+	// POST /social-pack { event_key, channel, content, actor? }
+	// Enregistre un texte pret pour un canal (facebook/x/telegram/newsletter).
+	// Ne publie jamais rien sur le reseau : preparation seulement, voir
+	// docs/newsroom/social-guidelines.md.
+	register_rest_route( 'sa-events/v1', '/social-pack', array(
+		'methods'             => 'POST',
+		'permission_callback' => $permission,
+		'callback'            => function ( WP_REST_Request $request ) use ( $shape_event ) {
+			$event_key = (string) $request->get_param( 'event_key' );
+			$channel   = (string) $request->get_param( 'channel' );
+			$content   = (string) $request->get_param( 'content' );
+			$row       = sa_event_get_by_key( $event_key );
+			if ( ! $row ) {
+				return new WP_Error( 'not_found', 'Evenement introuvable.', array( 'status' => 404 ) );
+			}
+			if ( ! in_array( $channel, sa_event_allowed_channels(), true ) ) {
+				return new WP_Error( 'bad_request', 'Canal invalide.', array( 'status' => 400 ) );
+			}
+			if ( '' === trim( $content ) ) {
+				return new WP_Error( 'bad_request', 'Contenu vide.', array( 'status' => 400 ) );
+			}
+			$actor = sanitize_text_field( (string) ( $request->get_param( 'actor' ) ?: 'agent' ) );
+			sa_event_social_add( $row->id, $channel, $content, $actor );
+			sa_event_log( $row->id, $actor, 'social_prepared', array( 'channel' => $channel ) );
+
+			return $shape_event( sa_event_get_by_key( $event_key ), true );
+		},
+	) );
+
+	// POST /social-mark-posted { social_post_id, actor? }
+	// Marque manuellement un texte prepare comme publie ailleurs (aucun envoi
+	// automatique n'existe : c'est Hicham qui l'a colle sur le reseau).
+	register_rest_route( 'sa-events/v1', '/social-mark-posted', array(
+		'methods'             => 'POST',
+		'permission_callback' => $permission,
+		'callback'            => function ( WP_REST_Request $request ) {
+			$id = (int) $request->get_param( 'social_post_id' );
+			if ( ! $id || ! sa_event_social_mark_posted( $id ) ) {
+				return new WP_Error( 'not_found', 'Publication preparee introuvable.', array( 'status' => 404 ) );
+			}
+			return array( 'id' => $id, 'status' => 'posted_manually' );
+		},
+	) );
 } );
 
 /* -------------------------- ADMIN (controle humain) ------------------------
@@ -702,6 +831,8 @@ function sa_event_admin_handle_post() {
 		}
 	} elseif ( 'promote' === $action && $event_key ) {
 		sa_event_promote_to_article( $event_key, $actor );
+	} elseif ( 'mark_social_posted' === $action && isset( $_POST['sa_social_id'] ) ) {
+		sa_event_social_mark_posted( (int) $_POST['sa_social_id'] );
 	}
 
 	wp_safe_redirect( add_query_arg( array( 'page' => 'sa-events', 'event' => $event_key ), admin_url( 'options-general.php' ) ) );
@@ -762,6 +893,31 @@ function sa_event_admin_page() {
 						</li>
 					<?php endforeach; ?>
 				</ul>
+
+				<h3>Publications sociales preparees</h3>
+				<p><small>Preparation seulement : aucun envoi automatique. A copier-coller manuellement sur le reseau concerne.</small></p>
+				<?php $social_posts = sa_event_social_list( $focused_event->id ); ?>
+				<?php if ( ! $social_posts ) : ?>
+					<p>Aucune publication preparee pour le moment.</p>
+				<?php else : ?>
+					<ul>
+						<?php foreach ( $social_posts as $sp ) : ?>
+							<li style="margin-bottom:8px;">
+								<?php echo sa_event_badge( $sp->channel ); ?>
+								<?php echo sa_event_badge( 'posted_manually' === $sp->status ? 'publie (manuel)' : 'brouillon' ); ?>
+								<br /><?php echo nl2br( esc_html( $sp->content ) ); ?>
+								<?php if ( 'draft' === $sp->status ) : ?>
+									<form method="post" style="display:inline;">
+										<?php wp_nonce_field( 'sa_event_admin', 'sa_event_nonce' ); ?>
+										<input type="hidden" name="sa_event_action" value="mark_social_posted" />
+										<input type="hidden" name="sa_social_id" value="<?php echo esc_attr( $sp->id ); ?>" />
+										<?php submit_button( 'Marquer comme publie manuellement', 'small', 'submit', false ); ?>
+									</form>
+								<?php endif; ?>
+							</li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
 
 				<h3>Chronologie</h3>
 				<ul>

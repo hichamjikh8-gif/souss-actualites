@@ -37,6 +37,11 @@ function makeEventsApi(baseUrl, secret) {
             request('/link-flash', { method: 'POST', body: JSON.stringify({ event_key: eventKey, flash_id: flashId, actor }) }),
         promoteToArticle: (eventKey, actor) =>
             request('/promote-to-article', { method: 'POST', body: JSON.stringify({ event_key: eventKey, actor }) }),
+        prepareSocialPost: (eventKey, channel, content, actor) =>
+            request('/social-pack', {
+                method: 'POST',
+                body: JSON.stringify({ event_key: eventKey, channel, content, actor }),
+            }),
     };
 }
 
