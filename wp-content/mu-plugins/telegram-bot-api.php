@@ -10,8 +10,19 @@
 // Pour les articles provenant de la syndication automatique, on affiche le nom
 // du journal source a la place du compte WordPress interne (lahcen / admin).
 // La meta _syndication_source est positionnee par l'endpoint /syndicate ci-dessous.
+//
+// Deux filtres pour couvrir les deux chemins de rendu :
+//   1. the_author                   -> themes utilisant the_author() dans The Loop
+//   2. get_the_author_display_name  -> themes/blocs utilisant get_the_author_meta()
+//      (blocs Gutenberg natifs "Post Author", themes modernes, REST API frontend)
+
 add_filter('the_author', function ($display_name) {
+    global $post;
     $post_id = get_the_ID();
+    // Fallback : si get_the_ID() renvoie 0 (hors Loop), on utilise le global $post
+    if (!$post_id && isset($post) && $post instanceof WP_Post) {
+        $post_id = $post->ID;
+    }
     if ($post_id) {
         $source = get_post_meta($post_id, '_syndication_source', true);
         if ($source) {
@@ -20,6 +31,27 @@ add_filter('the_author', function ($display_name) {
     }
     return $display_name;
 });
+
+// Couvre get_the_author_meta('display_name', $user_id) — utilise par les blocs
+// Gutenberg natifs (Post Author), les themes modernes et les appels directs.
+// On ne remplace que si user_id correspond bien a l'auteur de l'article courant.
+add_filter('get_the_author_display_name', function ($value, $user_id) {
+    global $post;
+    $post_id = get_the_ID();
+    if (!$post_id && isset($post) && $post instanceof WP_Post) {
+        $post_id = $post->ID;
+    }
+    if ($post_id) {
+        $p = get_post($post_id);
+        if ($p && (int) $p->post_author === (int) $user_id) {
+            $source = get_post_meta($post_id, '_syndication_source', true);
+            if ($source) {
+                return $source;
+            }
+        }
+    }
+    return $value;
+}, 10, 2);
 
 // CSS : rend les liens de la zone attribution/source visibles quel que soit le theme.
 add_action('wp_head', function () {
