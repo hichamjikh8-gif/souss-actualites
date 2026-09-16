@@ -10,14 +10,14 @@
     "name": "Hespress",
     "url": "https://hespress.com/feed",
     "category": "national",
-    "enabled": false,
-    "note": "Verifie le 2026-09-16 : flux valide, mais tres gros volume (toutes rubriques : politique, sport, culture...). Laisse desactive en attendant validation du redacteur en chef sur le bruit genere avant de l'activer (phase nationale, apres la phase locale)."
+    "enabled": true,
+    "note": "Verifie le 2026-09-16 : flux valide, gros volume (toutes rubriques : politique, sport, culture...). Active le 2026-09-16 sur demande du redacteur en chef (phase nationale). A surveiller : volume d'evenements 'to_watch' genere."
   },
   {
     "name": "La Nouvelle Tribune",
     "url": "https://lnt.ma/feed/",
     "category": "national",
-    "enabled": false,
-    "note": "Verifie le 2026-09-16 : flux valide, francophone, plutot economie/actualite generale. Meme remarque que Hespress : desactive en attendant la phase nationale."
+    "enabled": true,
+    "note": "Verifie le 2026-09-16 : flux valide, francophone, plutot economie/actualite generale. Active le 2026-09-16 sur demande du redacteur en chef (phase nationale)."
   }
 ]
