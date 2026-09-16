@@ -6,6 +6,43 @@
  * Perimetre volontairement restreint: brouillons, publication, stats, commentaires.
  */
 
+// ── Articles syndiques : auteur et style ──────────────────────────────────────
+// Pour les articles provenant de la syndication automatique, on affiche le nom
+// du journal source a la place du compte WordPress interne (lahcen / admin).
+// La meta _syndication_source est positionnee par l'endpoint /syndicate ci-dessous.
+add_filter('the_author', function ($display_name) {
+    $post_id = get_the_ID();
+    if ($post_id) {
+        $source = get_post_meta($post_id, '_syndication_source', true);
+        if ($source) {
+            return $source;
+        }
+    }
+    return $display_name;
+});
+
+// CSS : rend les liens de la zone attribution/source visibles quel que soit le theme.
+add_action('wp_head', function () {
+    echo '<style id="sa-syndication-css">
+.syndication-attribution,
+.syndication-readmore {
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 1em;
+}
+.syndication-attribution a,
+.syndication-readmore a {
+    color: #c0392b !important;
+    text-decoration: underline !important;
+    font-weight: 600;
+}
+.syndication-attribution a:hover,
+.syndication-readmore a:hover {
+    color: #922b21 !important;
+}
+</style>' . "\n";
+});
+
 add_action('rest_api_init', function () {
     $permission = function (WP_REST_Request $request) {
         if (!defined('SOUSS_BOT_SECRET') || SOUSS_BOT_SECRET === '') {
@@ -137,9 +174,10 @@ add_action('rest_api_init', function () {
         },
     ]);
 
-    // Syndication automatique : publie un article attribue a un journal source,
-    // directement en "publish", avec photo mise en avant telechargee depuis image_url.
-    // Meme X-Bot-Secret que le reste de l'API — aucun Application Password WP requis.
+    // ── Syndication automatique ──────────────────────────────────────────────
+    // Publie un article attribue a un journal source, directement en "publish",
+    // avec photo mise en avant telechargee depuis image_url.
+    // Utilise le meme X-Bot-Secret que le reste de l'API.
     register_rest_route('souss-bot/v1', '/syndicate', [
         'methods' => 'POST',
         'permission_callback' => $permission,
