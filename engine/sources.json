@@ -6,7 +6,7 @@
     "enabled": true,
     "publish_to_sa": true,
     "filter_languages": true,
-    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, articles du jour, specifique Agadir/Souss-Massa."
+    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, articles du jour, specifique Agadir/Souss-Massa. Priorite locale demandee par le redacteur en chef."
   },
   {
     "name": "Hespress",
@@ -15,7 +15,7 @@
     "enabled": true,
     "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Syndication desactivee le 2026-09-17 sur demande du redacteur en chef."
+    "note": "Verifie le 2026-09-16 : flux valide, gros volume. Syndication desactivee le 2026-09-17 sur demande du redacteur en chef — les evenements sont crees mais pas publies automatiquement sur le site."
   },
   {
     "name": "La Nouvelle Tribune",
@@ -24,7 +24,7 @@
     "enabled": true,
     "publish_to_sa": true,
     "filter_languages": true,
-    "note": "Filtre langue active car le flux inclut des articles en anglais hors perimetre editorial."
+    "note": "Verifie le 2026-09-16 : flux valide, francophone, plutot economie/actualite generale. Filtre langue active (filter_languages) car le flux inclut des articles en anglais hors perimetre editorial."
   },
   {
     "name": "Aujourd'hui le Maroc",
@@ -34,5 +34,59 @@
     "publish_to_sa": true,
     "filter_languages": true,
     "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, francophone, mise a jour horaire."
+  },
+  {
+    "name": "MarocFoot",
+    "url": "https://www.marocfoot.com/feed",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Football marocain : equipe nationale, Botola Pro, joueurs marocains en Europe. Source 100% dediee au foot marocain."
+  },
+  {
+    "name": "Le360 Sport",
+    "url": "https://sport.le360.ma/feed",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Section sport du portail marocain Le360 : football, athletes marocains, transferts, competitions nationales et internationales."
+  },
+  {
+    "name": "Foot Mercato",
+    "url": "https://www.footmercato.net/feed",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Actualite mercato et football europeen en francais. Couvre en detail les joueurs marocains (Hakimi, Ziyech, En-Nesyri, Ounahi, Mazraoui, Saiss...). Filtre langue actif."
+  },
+  {
+    "name": "L'Equipe",
+    "url": "https://www.lequipe.fr/rss/actu_rss.xml",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": false,
+    "filter_languages": true,
+    "note": "Grand quotidien sportif francais : Ligue des Champions, transferts, CAN, Coupe du Monde. Volume tres eleve — syndication desactivee par defaut, evenements crees pour la newsroom."
+  },
+  {
+    "name": "Kooora",
+    "url": "https://ar.kooora.com/?feed=rss2",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Premier portail football arabe du Maghreb/Moyen-Orient. Couvre les equipes du Maghreb, Liga, Premier League, Champions League en arabe. Filtre langue actif (arabe uniquement)."
+  },
+  {
+    "name": "Goal.com Arabe",
+    "url": "https://www.goal.com/ar/feeds/rss",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Goal.com version arabe : transferts, grandes competitions europeennes, equipes nationales africaines. Couvre beaucoup les Lions de l'Atlas."
   }
 ]
