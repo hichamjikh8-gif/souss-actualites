@@ -16,6 +16,7 @@ const BOT_API_SECRET = process.env.BOT_API_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID ? String(process.env.ADMIN_TELEGRAM_ID) : null;
 const CHECK_INTERVAL_MS = parseInt(process.env.SOURCE_CHECK_INTERVAL_MS || '600000', 10); // 10 minutes
+const IMPORTANT_CHECK_INTERVAL_MS = parseInt(process.env.IMPORTANT_CHECK_INTERVAL_MS || '60000', 10); // 1 minute : verifie plus souvent que le flux RSS pour que le clic "important" de Hicham declenche vite l'alerte Telegram
 const SOURCES_FILE = process.env.SOURCES_CONFIG_FILE || path.join(__dirname, 'sources.json');
 const SEEN_DIR = path.join(__dirname, '.seen-sources');
 
@@ -165,12 +166,11 @@ async function tick() {
     const sources = loadSources().filter((s) => s.enabled);
     if (!sources.length) {
         console.log('Aucune source activee dans sources.json.');
-    } else {
-        for (const source of sources) {
-            await checkSource(source);
-        }
+        return;
     }
-    await notifyImportantEvents();
+    for (const source of sources) {
+        await checkSource(source);
+    }
 }
 
 function main() {
@@ -182,10 +182,17 @@ function main() {
     const active = sources.filter((s) => s.enabled).map((s) => `${s.name} (${s.category})`);
     console.log('Demarrage de la veille de sources externes (Souss Actualites)');
     console.log(`Sources activees : ${active.length ? active.join(', ') : '(aucune)'}`);
-    console.log(`Frequence : toutes les ${CHECK_INTERVAL_MS / 1000} secondes`);
+    console.log(`Frequence flux RSS : toutes les ${CHECK_INTERVAL_MS / 1000} secondes`);
+    console.log(`Frequence verification "important" : toutes les ${IMPORTANT_CHECK_INTERVAL_MS / 1000} secondes`);
 
     tick();
     setInterval(tick, CHECK_INTERVAL_MS);
+
+    // Intervalle separe et plus rapproche : quand Hicham coche "important"
+    // dans /wp-admin (ou que l'agent le fait), l'alerte Telegram part vite,
+    // sans attendre le prochain cycle du flux RSS.
+    notifyImportantEvents();
+    setInterval(notifyImportantEvents, IMPORTANT_CHECK_INTERVAL_MS);
 }
 
 main();

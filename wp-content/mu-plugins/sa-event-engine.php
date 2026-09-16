@@ -829,6 +829,23 @@ function sa_event_admin_handle_post() {
 				sa_event_log( $row->id, $actor, 'updated', array( 'status' => $status ) );
 			}
 		}
+	} elseif ( 'set_importance' === $action && $event_key ) {
+		$importance = isset( $_POST['sa_event_importance'] ) ? sanitize_key( wp_unslash( $_POST['sa_event_importance'] ) ) : '';
+		if ( in_array( $importance, sa_event_allowed_importance(), true ) ) {
+			$row = sa_event_get_by_key( $event_key );
+			if ( $row ) {
+				global $wpdb;
+				$wpdb->update( sa_event_table_events(),
+					array( 'importance' => $importance, 'last_updated_at' => current_time( 'mysql' ) ),
+					array( 'id' => $row->id ), array( '%s', '%s' ), array( '%d' )
+				);
+				// C'est ICI, sur une action manuelle du redacteur en chef, que
+				// l'evenement peut devenir "important" - jamais automatique.
+				// La veille (source-watcher.js) verifie sa-events/v1/list?importance=important
+				// a intervalle rapproche et envoie l'alerte Telegram a ce moment-la.
+				sa_event_log( $row->id, $actor, 'updated', array( 'importance' => $importance ) );
+			}
+		}
 	} elseif ( 'promote' === $action && $event_key ) {
 		sa_event_promote_to_article( $event_key, $actor );
 	} elseif ( 'mark_social_posted' === $action && isset( $_POST['sa_social_id'] ) ) {
@@ -927,6 +944,20 @@ function sa_event_admin_page() {
 				</ul>
 
 				<form method="post" style="margin-top:12px;">
+					<?php wp_nonce_field( 'sa_event_admin', 'sa_event_nonce' ); ?>
+					<input type="hidden" name="sa_event_action" value="set_importance" />
+					<input type="hidden" name="sa_event_key" value="<?php echo esc_attr( $focused_event->event_key ); ?>" />
+					<?php if ( 'important' === $focused_event->importance ) : ?>
+						<input type="hidden" name="sa_event_importance" value="to_watch" />
+						<?php submit_button( 'Retirer le marqueur "important"', 'secondary', 'submit', false ); ?>
+						<span style="margin-left:8px;color:#a80000;font-weight:600;">⚠️ Marque important — alerte Telegram envoyee</span>
+					<?php else : ?>
+						<input type="hidden" name="sa_event_importance" value="important" />
+						<?php submit_button( '⚠️ Marquer comme important (envoie une alerte Telegram)', 'primary', 'submit', false ); ?>
+					<?php endif; ?>
+				</form>
+
+				<form method="post" style="margin-top:8px;">
 					<?php wp_nonce_field( 'sa_event_admin', 'sa_event_nonce' ); ?>
 					<input type="hidden" name="sa_event_action" value="set_status" />
 					<input type="hidden" name="sa_event_key" value="<?php echo esc_attr( $focused_event->event_key ); ?>" />
