@@ -65,7 +65,11 @@ Interface humaine : Réglages → « Événements (Newsroom) » dans `/wp-admin`
 
 Côté bot (`engine/lib/agent.js`), l'agent Claude dispose des outils `buscar_eventos_similares`, `crear_evento`, `agregar_fuente_evento`, `actualizar_evento`, `preparar_articulo`, et `publicar_flash` (peut être lié à un `event_key`). Le prompt système lui demande de chercher un événement existant avant d'en créer un nouveau, et de ne jamais promouvoir un brouillon en article publié lui-même.
 
-**Ce qui manque encore** (à construire en priorité, voir P0/P1 plus bas) : ingestion réelle de sources externes (Reuters/AFP/MAP/sources locales — aujourd'hui `rss-watcher.js` republie seulement le propre flux du site), déduplication sémantique (le `/find-similar` actuel est un dédup déterministe par URL + une liste pour jugement humain/IA, pas encore un score de similarité automatique), fact-check multi-source automatisé, prépublication SEO/réseaux sociaux structurée, analytics.
+**Ce qui manque encore** : déduplication sémantique automatique (le `/find-similar` reste un dédup déterministe par URL + une liste pour jugement humain/IA — la veille RSS crée un événement par URL distincte, donc plusieurs sources sur le même sujet donnent plusieurs événements à fusionner manuellement ou via l'outil `fusionar_eventos`), fact-check multi-source automatisé, analytics.
+
+## Veille de sources externes
+
+`engine/source-watcher.js` (process Railway `sources`, voir `engine/Procfile`) lit `engine/sources.json` et transforme chaque nouvel article RSS en événement `detected`/`unverified` via `sa-events/v1`. Aucun flash ni article n'est jamais créé automatiquement à partir de la veille. Sources activées au 2026-09-16 : **Agadir24** (locale, priorité demandée par le rédacteur en chef). Hespress et La Nouvelle Tribune (nationales) sont configurées mais désactivées (`enabled: false`) en attendant validation du volume avant la phase nationale — les activer est un choix éditorial de Hicham, pas une décision technique. **Ce service ne peut fonctionner qu'une fois le mu-plugin `sa-event-engine.php` réellement déployé en production** (voir la note push/staging plus haut).
 
 ## Breaking News ≠ article
 
