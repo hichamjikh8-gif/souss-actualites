@@ -5,6 +5,7 @@ const { makeTelegramClient } = require('./lib/telegram');
 const { makeWpBotApi } = require('./lib/wpBotApi');
 const { makeFlashApi } = require('./lib/wpBotApi');
 const { makeEventsApi } = require('./lib/eventsApi');
+const { makeSearchConsoleClient } = require('./lib/searchConsole');
 const { makeAgent } = require('./lib/agent');
 
 const PORT = process.env.PORT || 3000;
@@ -15,9 +16,11 @@ const WP_BASE_URL = process.env.WP_BASE_URL || 'https://souss-actualites.com';
 const BOT_API_SECRET = process.env.BOT_API_SECRET;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const FAL_KEY = process.env.FAL_KEY;
+const GOOGLE_SERVICE_ACCOUNT_JSON = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+const SEARCH_CONSOLE_SITE_URL = process.env.SEARCH_CONSOLE_SITE_URL || 'https://souss-actualites.com/';
 const UPTIME_CHECK_INTERVAL_MS = parseInt(process.env.UPTIME_CHECK_INTERVAL_MS || '300000', 10);
 const MODERATION_CHECK_INTERVAL_MS = parseInt(process.env.MODERATION_CHECK_INTERVAL_MS || '300000', 10);
-const KNOWN_COMMANDS = ['/start', '/help', '/stats', '/drafts', '/comments', '/publish', '/new'];
+const KNOWN_COMMANDS = ['/start', '/help', '/stats', '/drafts', '/comments', '/publish', '/new', '/seo'];
 
 const SEEN_COMMENTS_FILE = path.join(__dirname, 'seen-comments.json');
 
@@ -28,9 +31,12 @@ const telegram = TELEGRAM_BOT_TOKEN ? makeTelegramClient(TELEGRAM_BOT_TOKEN) : n
 const wpApi = BOT_API_SECRET ? makeWpBotApi(WP_BASE_URL, BOT_API_SECRET) : null;
 const flashApi = BOT_API_SECRET ? makeFlashApi(WP_BASE_URL, BOT_API_SECRET) : null;
 const eventsApi = BOT_API_SECRET ? makeEventsApi(WP_BASE_URL, BOT_API_SECRET) : null;
+const searchConsole = GOOGLE_SERVICE_ACCOUNT_JSON
+    ? makeSearchConsoleClient(GOOGLE_SERVICE_ACCOUNT_JSON, SEARCH_CONSOLE_SITE_URL)
+    : null;
 const agent =
     ANTHROPIC_API_KEY && telegram && flashApi
-        ? makeAgent({ anthropicApiKey: ANTHROPIC_API_KEY, telegram, wpApi, flashApi, eventsApi, falKey: FAL_KEY })
+        ? makeAgent({ anthropicApiKey: ANTHROPIC_API_KEY, telegram, wpApi, flashApi, eventsApi, searchConsole, falKey: FAL_KEY })
         : null;
 
 function loadSeenComments() {
@@ -76,6 +82,32 @@ function formatStats(stats) {
     ].join('\n');
 }
 
+function formatSeoSummary(summary) {
+    const t = summary.totals;
+    const lines = [`📊 Google Search Console — ${summary.period}`, ''];
+    if (t) {
+        lines.push(`Clics : ${Math.round(t.clicks)}`);
+        lines.push(`Impressions : ${Math.round(t.impressions)}`);
+        lines.push(`CTR moyen : ${(t.ctr * 100).toFixed(2)}%`);
+        lines.push(`Position moyenne : ${t.position.toFixed(1)}`);
+    } else {
+        lines.push('(aucune donnée sur cette période)');
+    }
+    lines.push('', 'Top requêtes :');
+    if (summary.topQueries.length) {
+        summary.topQueries.forEach((q) => lines.push(`• ${q.keys[0]} — ${Math.round(q.clicks)} clics, ${Math.round(q.impressions)} impr.`));
+    } else {
+        lines.push('(aucune)');
+    }
+    lines.push('', 'Top pages :');
+    if (summary.topPages.length) {
+        summary.topPages.forEach((p) => lines.push(`• ${p.keys[0]} — ${Math.round(p.clicks)} clics`));
+    } else {
+        lines.push('(aucune)');
+    }
+    return lines.join('\n');
+}
+
 function formatPendingComments(comments) {
     if (!comments.length) return 'Aucun commentaire en attente.';
     return comments
@@ -90,6 +122,7 @@ const HELP_TEXT = [
     '/publish <id> — publier un brouillon',
     "/new <titre> | <contenu> — créer un nouveau brouillon",
     '/comments — commentaires en attente de modération',
+    '/seo — performances Google Search Console (28 derniers jours)',
     '/help — cette aide',
 ].join('\n');
 
@@ -140,6 +173,13 @@ async function handleCommand(chatId, text) {
         } else if (cmd === '/comments') {
             const comments = await wpApi.getPendingComments();
             await telegram.sendMessage(chatId, formatPendingComments(comments));
+        } else if (cmd === '/seo') {
+            if (!searchConsole) {
+                await telegram.sendMessage(chatId, "Google Search Console n'est pas configuré (GOOGLE_SERVICE_ACCOUNT_JSON manquant).");
+                return;
+            }
+            const summary = await searchConsole.getSummary(28);
+            await telegram.sendMessage(chatId, formatSeoSummary(summary));
         } else if (cmd === '/publish') {
             const id = parseInt(argText, 10);
             if (!id) {
@@ -238,9 +278,24 @@ async function registerWebhook() {
     }
 }
 
+async function verifySearchConsoleAccess() {
+    if (!searchConsole) {
+        console.log('Search Console non configuré (GOOGLE_SERVICE_ACCOUNT_JSON manquant).');
+        return;
+    }
+    try {
+        const summary = await searchConsole.getSummary(7);
+        const clicks = summary.totals ? Math.round(summary.totals.clicks) : 0;
+        console.log(`Search Console : connexion OK (site ${SEARCH_CONSOLE_SITE_URL}). Clics des 7 derniers jours : ${clicks}.`);
+    } catch (err) {
+        console.error(`Search Console : échec de connexion (verifier que le compte de service a bien été ajouté comme utilisateur sur la propriété ${SEARCH_CONSOLE_SITE_URL} dans Search Console) -`, err.message);
+    }
+}
+
 app.listen(PORT, () => {
     console.log(`Service web demarre sur le port ${PORT}`);
     registerWebhook();
+    verifySearchConsoleAccess();
     if (ADMIN_TELEGRAM_ID) {
         setInterval(checkUptime, UPTIME_CHECK_INTERVAL_MS);
         setInterval(checkPendingComments, MODERATION_CHECK_INTERVAL_MS);

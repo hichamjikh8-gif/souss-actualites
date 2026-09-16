@@ -21,6 +21,7 @@ Podes:
 - Publicar un flash de breaking news con publicar_flash: SOLO el titular (max 8 palabras, en frances), que se muestra unicamente en la banda roja de BREAKING NEWS de la portada. NO se crea ninguna pagina de articulo en el sitio. Usalo solo cuando Hicham lo pida explicitamente ("publicalo", "publica esto", "publica el flash", etc), o como parte de la tarea automatica de breaking news. Si el flash corresponde a un evento que ya registraste, pasa su event_key para que quede vinculado.
 - Preparar (nunca publicar) un brouillon de articulo a partir de un evento con preparar_articulo, solo cuando Hicham lo pida explicitamente.
 - Preparar (nunca publicar) un texto para Facebook, X, Telegram o newsletter con preparar_publicacion_social, solo cuando Hicham lo pida explicitamente: no hay ninguna API de red social conectada, el texto queda guardado para que el lo use manualmente.
+- Consultar el rendimiento SEO real (clics, impresiones, CTR, mejores consultas/paginas) con obtener_analytics_seo cuando te lo pidan.
 
 Nunca inventes hechos ni trates una sola fuente como automaticamente verdadera: marca la confianza del evento como "unverified" o "partial" hasta tener confirmacion, y "contradictory" si las fuentes se contradicen. Trabajas por etapas dentro de la misma conversacion (buscar -> registrar evento -> redactar -> imagen opcional -> publicar), recordando lo que se dijo antes. Respondele siempre a Hicham en espanol, aunque el articulo publicado quede en frances.`;
 
@@ -179,6 +180,17 @@ const TOOLS = [
         },
     },
     {
+        name: 'obtener_analytics_seo',
+        description:
+            'Obtiene un resumen real de Google Search Console (clics, impresiones, CTR, posicion promedio, mejores consultas y paginas) de los ultimos N dias. Usar cuando Hicham pregunte por el rendimiento SEO o el trafico del sitio - nunca inventes cifras.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                dias: { type: 'integer', description: 'Numero de dias a analizar. 28 por defecto.' },
+            },
+        },
+    },
+    {
         name: 'preparar_publicacion_social',
         description:
             'Redacta y guarda un texto listo para un canal (facebook, x, telegram o newsletter) a partir de un evento. NO publica nada en el canal real: no hay ninguna API de Facebook/X conectada, es solo una preparacion que Hicham copia y pega manualmente. Usar solo cuando lo pida explicitamente.',
@@ -194,7 +206,7 @@ const TOOLS = [
     },
 ];
 
-function makeAgent({ anthropicApiKey, telegram, wpApi, flashApi, eventsApi, falKey }) {
+function makeAgent({ anthropicApiKey, telegram, wpApi, flashApi, eventsApi, searchConsole, falKey }) {
     const client = new Anthropic({ apiKey: anthropicApiKey });
     const conversations = new Map(); // chatId -> Anthropic.MessageParam[]
 
@@ -332,6 +344,15 @@ function makeAgent({ anthropicApiKey, telegram, wpApi, flashApi, eventsApi, falK
             }
             const event = await eventsApi.merge(block.input.event_key_origen, block.input.event_key_destino, 'agent');
             return JSON.stringify({ ok: true, event });
+        }
+
+        if (block.name === 'obtener_analytics_seo') {
+            if (!searchConsole) {
+                return JSON.stringify({ ok: false, error: 'Google Search Console no esta configurado (GOOGLE_SERVICE_ACCOUNT_JSON faltante).' });
+            }
+            const dias = block.input && block.input.dias ? parseInt(block.input.dias, 10) : 28;
+            const summary = await searchConsole.getSummary(dias);
+            return JSON.stringify({ ok: true, ...summary });
         }
 
         if (block.name === 'preparar_publicacion_social') {
