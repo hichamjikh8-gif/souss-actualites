@@ -4,6 +4,7 @@
     "url": "https://agadir24.info/feed",
     "category": "local",
     "enabled": true,
+    "publish_to_sa": true,
     "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, articles du jour, specifique Agadir/Souss-Massa. Priorite locale demandee par le redacteur en chef."
   },
   {
@@ -11,6 +12,7 @@
     "url": "https://hespress.com/feed",
     "category": "national",
     "enabled": true,
+    "publish_to_sa": true,
     "note": "Verifie le 2026-09-16 : flux valide, gros volume (toutes rubriques : politique, sport, culture...). Active le 2026-09-16 sur demande du redacteur en chef (phase nationale). A surveiller : volume d'evenements 'to_watch' genere."
   },
   {
@@ -18,6 +20,7 @@
     "url": "https://lnt.ma/feed/",
     "category": "national",
     "enabled": true,
+    "publish_to_sa": true,
     "note": "Verifie le 2026-09-16 : flux valide, francophone, plutot economie/actualite generale. Active le 2026-09-16 sur demande du redacteur en chef (phase nationale)."
   },
   {
@@ -25,6 +28,7 @@
     "url": "https://aujourdhui.ma/feed",
     "category": "national",
     "enabled": true,
+    "publish_to_sa": true,
     "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, francophone, mise a jour horaire. MAP (agence officielle) et L'Economiste cherches mais pas de flux RSS fonctionnel trouve (403 / pas de flux reel) - pas ajoutes pour eviter une URL non verifiee."
   }
 ]
