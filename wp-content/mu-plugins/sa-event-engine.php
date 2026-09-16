@@ -551,6 +551,158 @@ function sa_event_related_published_posts( $title, $limit = 3 ) {
 	return $related;
 }
 
+/* ------------------------- IMAGE A LA UNE (Pexels/Unsplash) ----------------
+ * Recherche une photo libre de droits liee au sujet d'un evenement et
+ * l'attache comme image a la une du brouillon. Desactive tant qu'aucune des
+ * deux constantes (PEXELS_API_KEY, UNSPLASH_ACCESS_KEY) n'est definie dans
+ * WORDPRESS_CONFIG_EXTRA - Pexels est tente en premier (inscription plus
+ * simple), Unsplash en repli. Recherche avec le titre de l'evenement tel
+ * quel : marche bien pour les noms propres (Agadir, Maroc...), moins bien
+ * pour un titre entierement en arabe traduit litteralement - limite connue,
+ * pas de traduction automatique ici (pas d'appel IA dans ce mu-plugin).
+ * ---------------------------------------------------------------------------
+ */
+
+function sa_event_stock_photo_configured() {
+	return ( defined( 'PEXELS_API_KEY' ) && PEXELS_API_KEY !== '' )
+		|| ( defined( 'UNSPLASH_ACCESS_KEY' ) && UNSPLASH_ACCESS_KEY !== '' );
+}
+
+function sa_event_stock_photo_query( $title ) {
+	$tokens = sa_event_tokenize( $title );
+	usort( $tokens, function ( $a, $b ) {
+		return mb_strlen( $b, 'UTF-8' ) <=> mb_strlen( $a, 'UTF-8' );
+	} );
+	return implode( ' ', array_slice( $tokens, 0, 4 ) );
+}
+
+function sa_event_search_pexels( $query ) {
+	$response = wp_remote_get(
+		'https://api.pexels.com/v1/search?' . http_build_query( array(
+			'query'       => $query,
+			'per_page'    => 1,
+			'orientation' => 'landscape',
+		) ),
+		array(
+			'timeout' => 15,
+			'headers' => array( 'Authorization' => PEXELS_API_KEY ),
+		)
+	);
+	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) >= 300 ) {
+		return null;
+	}
+	$data = json_decode( wp_remote_retrieve_body( $response ), true );
+	if ( empty( $data['photos'][0] ) ) {
+		return null;
+	}
+	$p = $data['photos'][0];
+	return array(
+		'image_url'              => isset( $p['src']['large2x'] ) ? $p['src']['large2x'] : ( $p['src']['large'] ?? null ),
+		'credit_name'            => $p['photographer'] ?? 'Pexels',
+		'source_label'           => 'Pexels',
+		'download_tracking_url'  => null,
+	);
+}
+
+function sa_event_search_unsplash( $query ) {
+	$response = wp_remote_get(
+		'https://api.unsplash.com/search/photos?' . http_build_query( array(
+			'query'       => $query,
+			'per_page'    => 1,
+			'orientation' => 'landscape',
+		) ),
+		array(
+			'timeout' => 15,
+			'headers' => array( 'Authorization' => 'Client-ID ' . UNSPLASH_ACCESS_KEY ),
+		)
+	);
+	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) >= 300 ) {
+		return null;
+	}
+	$data = json_decode( wp_remote_retrieve_body( $response ), true );
+	if ( empty( $data['results'][0] ) ) {
+		return null;
+	}
+	$p = $data['results'][0];
+	return array(
+		'image_url'             => $p['urls']['regular'] ?? null,
+		'credit_name'           => $p['user']['name'] ?? 'Unsplash',
+		'source_label'          => 'Unsplash',
+		// Guideline officielle Unsplash : signaler le telechargement quand une
+		// image est reellement utilisee (pas seulement affichee en recherche).
+		'download_tracking_url' => $p['links']['download_location'] ?? null,
+	);
+}
+
+function sa_event_search_stock_photo( $title ) {
+	if ( ! sa_event_stock_photo_configured() ) {
+		return null;
+	}
+	$query = sa_event_stock_photo_query( $title );
+	if ( '' === $query ) {
+		return null;
+	}
+	if ( defined( 'PEXELS_API_KEY' ) && PEXELS_API_KEY !== '' ) {
+		$photo = sa_event_search_pexels( $query );
+		if ( $photo && ! empty( $photo['image_url'] ) ) {
+			return $photo;
+		}
+	}
+	if ( defined( 'UNSPLASH_ACCESS_KEY' ) && UNSPLASH_ACCESS_KEY !== '' ) {
+		$photo = sa_event_search_unsplash( $query );
+		if ( $photo && ! empty( $photo['image_url'] ) ) {
+			return $photo;
+		}
+	}
+	return null;
+}
+
+/**
+ * Telecharge la photo trouvee et l'attache comme image a la une du post.
+ * Retourne true en cas de succes, false sinon (jamais fatal : l'article
+ * reste un brouillon valide meme sans image).
+ */
+function sa_event_attach_featured_image( $post_id, $photo ) {
+	if ( empty( $photo['image_url'] ) ) {
+		return false;
+	}
+
+	require_once ABSPATH . 'wp-admin/includes/media.php';
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+	require_once ABSPATH . 'wp-admin/includes/image.php';
+
+	$tmp = download_url( $photo['image_url'], 15 );
+	if ( is_wp_error( $tmp ) ) {
+		return false;
+	}
+
+	$file_array = array(
+		'name'     => 'sa-event-photo-' . sanitize_title( $photo['source_label'] ) . '-' . time() . '.jpg',
+		'tmp_name' => $tmp,
+	);
+
+	$attach_id = media_handle_sideload( $file_array, $post_id, null, array(
+		'post_excerpt' => sprintf( 'Photo : %s / %s', $photo['credit_name'], $photo['source_label'] ),
+	) );
+
+	if ( is_wp_error( $attach_id ) ) {
+		@unlink( $tmp );
+		return false;
+	}
+
+	update_post_meta( $attach_id, '_sa_stock_photo_credit', sanitize_text_field( $photo['credit_name'] . ' / ' . $photo['source_label'] ) );
+	set_post_thumbnail( $post_id, $attach_id );
+
+	if ( ! empty( $photo['download_tracking_url'] ) && defined( 'UNSPLASH_ACCESS_KEY' ) ) {
+		wp_remote_get( $photo['download_tracking_url'], array(
+			'timeout' => 10,
+			'headers' => array( 'Authorization' => 'Client-ID ' . UNSPLASH_ACCESS_KEY ),
+		) );
+	}
+
+	return true;
+}
+
 function sa_event_promote_to_article( $event_key, $actor ) {
 	$event = sa_event_get_by_key( $event_key );
 	if ( ! $event ) {
@@ -603,6 +755,14 @@ function sa_event_promote_to_article( $event_key, $actor ) {
 		return $post_id;
 	}
 
+	// Image a la une (Pexels/Unsplash) : ne bloque jamais la creation du
+	// brouillon si la recherche/le telechargement echoue.
+	$image_found = false;
+	$photo       = sa_event_search_stock_photo( $event->title );
+	if ( $photo ) {
+		$image_found = sa_event_attach_featured_image( $post_id, $photo );
+	}
+
 	global $wpdb;
 	$wpdb->update( sa_event_table_events(), array(
 		'article_post_id' => $post_id,
@@ -610,12 +770,16 @@ function sa_event_promote_to_article( $event_key, $actor ) {
 		'last_updated_at'  => current_time( 'mysql' ),
 	), array( 'id' => $event->id ), array( '%d', '%s', '%s' ), array( '%d' ) );
 
-	sa_event_log( $event->id, $actor, 'article_draft_created', array( 'post_id' => $post_id ) );
+	sa_event_log( $event->id, $actor, 'article_draft_created', array(
+		'post_id'     => $post_id,
+		'image_found' => $image_found,
+	) );
 
 	return array(
-		'event_key' => $event_key,
-		'post_id'   => $post_id,
-		'edit_url'  => get_edit_post_link( $post_id, 'raw' ),
+		'event_key'   => $event_key,
+		'post_id'     => $post_id,
+		'edit_url'    => get_edit_post_link( $post_id, 'raw' ),
+		'image_found' => $image_found,
 	);
 }
 

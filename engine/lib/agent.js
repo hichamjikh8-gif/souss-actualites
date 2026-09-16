@@ -157,7 +157,7 @@ const TOOLS = [
     {
         name: 'preparar_articulo',
         description:
-            'Prepara un BROUILLON de articulo WordPress a partir de un evento (titulo + resumen + lista de fuentes). NO lo publica: Hicham debe revisarlo y publicarlo el mismo. Usar solo cuando lo pida explicitamente.',
+            'Prepara un BROUILLON de articulo WordPress a partir de un evento (titulo + resumen + lista de fuentes + una foto libre de derechos si Pexels/Unsplash estan configurados). NO lo publica: Hicham debe revisarlo y publicarlo el mismo. Usar solo cuando lo pida explicitamente.',
         input_schema: {
             type: 'object',
             properties: {
