@@ -5,15 +5,17 @@
     "category": "local",
     "enabled": true,
     "publish_to_sa": true,
-    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, articles du jour, specifique Agadir/Souss-Massa. Priorite locale demandee par le redacteur en chef."
+    "filter_languages": true,
+    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, articles du jour, specifique Agadir/Souss-Massa."
   },
   {
     "name": "Hespress",
     "url": "https://hespress.com/feed",
     "category": "national",
     "enabled": true,
-    "publish_to_sa": true,
-    "note": "Verifie le 2026-09-16 : flux valide, gros volume (toutes rubriques : politique, sport, culture...). Active le 2026-09-16 sur demande du redacteur en chef (phase nationale). A surveiller : volume d'evenements 'to_watch' genere."
+    "publish_to_sa": false,
+    "filter_languages": true,
+    "note": "Syndication desactivee le 2026-09-17 sur demande du redacteur en chef."
   },
   {
     "name": "La Nouvelle Tribune",
@@ -21,7 +23,8 @@
     "category": "national",
     "enabled": true,
     "publish_to_sa": true,
-    "note": "Verifie le 2026-09-16 : flux valide, francophone, plutot economie/actualite generale. Active le 2026-09-16 sur demande du redacteur en chef (phase nationale)."
+    "filter_languages": true,
+    "note": "Filtre langue active car le flux inclut des articles en anglais hors perimetre editorial."
   },
   {
     "name": "Aujourd'hui le Maroc",
@@ -29,6 +32,7 @@
     "category": "national",
     "enabled": true,
     "publish_to_sa": true,
-    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, francophone, mise a jour horaire. MAP (agence officielle) et L'Economiste cherches mais pas de flux RSS fonctionnel trouve (403 / pas de flux reel) - pas ajoutes pour eviter une URL non verifiee."
+    "filter_languages": true,
+    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, francophone, mise a jour horaire."
   }
 ]
