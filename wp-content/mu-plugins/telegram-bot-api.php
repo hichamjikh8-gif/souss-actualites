@@ -136,4 +136,81 @@ add_action('rest_api_init', function () {
             ];
         },
     ]);
+
+    // Syndication automatique : publie un article attribue a un journal source,
+    // directement en "publish", avec photo mise en avant telechargee depuis image_url.
+    // Meme X-Bot-Secret que le reste de l'API — aucun Application Password WP requis.
+    register_rest_route('souss-bot/v1', '/syndicate', [
+        'methods' => 'POST',
+        'permission_callback' => $permission,
+        'callback' => function (WP_REST_Request $request) {
+            $title       = sanitize_text_field((string) $request->get_param('title'));
+            $content     = (string) $request->get_param('content');
+            $image_url   = esc_url_raw((string) $request->get_param('image_url'));
+            $category_ids = array_filter(array_map('intval', (array) ($request->get_param('category_ids') ?: [])));
+            $source_name = sanitize_text_field((string) $request->get_param('source_name'));
+            $source_url  = esc_url_raw((string) $request->get_param('source_url'));
+            $event_key   = sanitize_text_field((string) $request->get_param('event_key'));
+
+            if ($title === '' || $source_url === '') {
+                return new WP_Error('bad_request', 'title et source_url sont requis.', ['status' => 400]);
+            }
+
+            // Telecharger et attacher la photo depuis la source
+            $featured_media_id = 0;
+            if ($image_url !== '') {
+                require_once ABSPATH . 'wp-admin/includes/file.php';
+                require_once ABSPATH . 'wp-admin/includes/media.php';
+                require_once ABSPATH . 'wp-admin/includes/image.php';
+
+                $tmp = download_url($image_url, 20);
+                if (!is_wp_error($tmp)) {
+                    $ext = strtolower(pathinfo(parse_url($image_url, PHP_URL_PATH), PATHINFO_EXTENSION));
+                    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+                        $ext = 'jpg';
+                    }
+                    $filename   = 'syndic-' . ($event_key ?: uniqid()) . '-' . time() . '.' . $ext;
+                    $file_array = ['name' => $filename, 'tmp_name' => $tmp];
+                    $media_id   = media_handle_sideload($file_array, 0);
+                    if (!is_wp_error($media_id)) {
+                        $featured_media_id = (int) $media_id;
+                    } else {
+                        @unlink($tmp);
+                    }
+                }
+            }
+
+            $author  = get_user_by('login', 'lahcen');
+            $cats    = !empty($category_ids) ? array_values($category_ids) : [3];
+            $post_id = wp_insert_post([
+                'post_title'    => $title,
+                'post_content'  => wp_kses_post($content),
+                'post_status'   => 'publish',
+                'post_author'   => $author ? $author->ID : 1,
+                'post_category' => $cats,
+            ], true);
+
+            if (is_wp_error($post_id)) {
+                return $post_id;
+            }
+
+            wp_set_post_categories($post_id, $cats);
+
+            if ($featured_media_id) {
+                set_post_thumbnail($post_id, $featured_media_id);
+            }
+
+            // Meta tracabilite syndication
+            update_post_meta($post_id, '_syndication_source',     $source_name);
+            update_post_meta($post_id, '_syndication_source_url', $source_url);
+            if ($event_key) {
+                update_post_meta($post_id, '_syndication_event_key', $event_key);
+            }
+
+            return [
+                'id'       => $post_id,
+                'post_url' => get_permalink($post_id),
+            ];
+        },
+    ]);
 });
