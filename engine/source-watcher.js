@@ -81,6 +81,24 @@ async function processItem(source, item) {
     if (!title) return;
 
     try {
+        // Verifie AVANT de creer si un evenement ouvert ressemble deja a ce
+        // titre (heuristique cote serveur, voir sa_event_title_similarity dans
+        // sa-event-engine.php). On cree quand meme l'evenement - la veille ne
+        // fusionne jamais toute seule, c'est un signal pour /wp-admin ou
+        // l'agent (fusionar_eventos) - mais on le note dans les logs pour
+        // qu'un doublon evident (meme fait rapporte par une autre source) ne
+        // passe pas inaperçu.
+        let similarWarning = '';
+        try {
+            const similar = await eventsApi.findSimilar(url, title);
+            const best = (similar.open_events || [])[0];
+            if (best && best.similarity >= 0.5) {
+                similarWarning = ` (ressemble a ${best.event_key} : "${best.title}", similarite ${Math.round(best.similarity * 100)}%)`;
+            }
+        } catch (simErr) {
+            // Non bloquant : la creation continue meme si la verification echoue.
+        }
+
         const created = await eventsApi.create({
             title,
             category: source.category,
@@ -94,7 +112,7 @@ async function processItem(source, item) {
                 excerpt,
             },
         });
-        console.log(`[${source.name}] Nouvel evenement ${created.event_key} : ${title}`);
+        console.log(`[${source.name}] Nouvel evenement ${created.event_key} : ${title}${similarWarning}`);
         // Pas de notification Telegram ici : la veille cree des evenements en
         // continu (bruit attendu, voir docs/newsroom/verification-procedures.md),
         // ce serait trop de messages. Seuls les evenements marques "important"

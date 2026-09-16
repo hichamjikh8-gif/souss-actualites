@@ -65,7 +65,9 @@ Interface humaine : Réglages → « Événements (Newsroom) » dans `/wp-admin`
 
 Côté bot (`engine/lib/agent.js`), l'agent Claude dispose des outils `buscar_eventos_similares`, `crear_evento`, `agregar_fuente_evento`, `actualizar_evento`, `preparar_articulo`, et `publicar_flash` (peut être lié à un `event_key`). Le prompt système lui demande de chercher un événement existant avant d'en créer un nouveau, et de ne jamais promouvoir un brouillon en article publié lui-même.
 
-**Ce qui manque encore** : déduplication sémantique automatique (le `/find-similar` reste un dédup déterministe par URL + une liste pour jugement humain/IA — la veille RSS crée un événement par URL distincte, donc plusieurs sources sur le même sujet donnent plusieurs événements à fusionner manuellement ou via l'outil `fusionar_eventos`), fact-check multi-source automatisé, analytics.
+**Déduplication** : `/find-similar` (et la fiche événement dans `/wp-admin`) score maintenant les événements ouverts par recouvrement de mots du titre (`sa_event_title_similarity`, coefficient de Jaccard, seuil 0.35). Validé sur des cas réels : ~0.64 pour deux titres quasi identiques sur le même fait, ~0 pour deux articles météo différents. **Limite assumée : ça ne fonctionne qu'au sein d'une même langue** — un titre français et le même fait en arabe (nos sources locales sont en arabe, certaines nationales en français) auront un score de 0, donc aucune détection cross-langue. La veille ne fusionne jamais automatiquement ; elle logue juste un avertissement (similarité ≥ 0.5) et laisse la décision à l'éditeur (bouton "Fusionner ici") ou à l'agent (`fusionar_eventos`).
+
+**Ce qui manque encore** : déduplication cross-langue (nécessiterait une vraie similarité sémantique, pas seulement lexicale), fact-check multi-source automatisé, analytics.
 
 ## Veille de sources externes
 

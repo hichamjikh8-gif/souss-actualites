@@ -252,6 +252,95 @@ function sa_event_find_by_url( $url ) {
 	return $row ? $row->event_key : null;
 }
 
+/**
+ * Heuristique de similarite (recouvrement de mots, coefficient de Jaccard) -
+ * PAS une similarite semantique reelle. Sert a suggerer des doublons
+ * probables (meme evenement rapporte par des sources differentes, donc des
+ * URLs differentes) pour que le redacteur en chef ou l'agent decide -
+ * jamais une fusion automatique. Fonctionne sur titres francais ou arabes
+ * (les deux langues des sources suivies).
+ */
+function sa_event_stopwords() {
+	static $stopwords = null;
+	if ( null === $stopwords ) {
+		$stopwords = array_flip( array(
+			// francais
+			'les', 'des', 'une', 'un', 'de', 'du', 'le', 'la', 'et', 'en', 'au', 'aux', 'pour',
+			'dans', 'sur', 'par', 'avec', 'ce', 'cette', 'ces', 'est', 'sont', 'plus', 'moins',
+			'apres', 'avant', 'entre', 'son', 'sa', 'ses', 'leur', 'leurs', 'qui', 'que', 'quoi',
+			// arabe (mots-outils frequents)
+			'في', 'من', 'على', 'إلى', 'عن', 'مع', 'هذا', 'هذه', 'ذلك', 'التي', 'الذي', 'أن',
+			'إن', 'لا', 'ما', 'لم', 'قد', 'كان', 'كانت', 'بعد', 'قبل', 'بين', 'حول', 'كل',
+		) );
+	}
+	return $stopwords;
+}
+
+function sa_event_tokenize( $title ) {
+	$title = mb_strtolower( (string) $title, 'UTF-8' );
+	$title = preg_replace( '/[\p{P}\p{S}]+/u', ' ', $title );
+	$words = preg_split( '/\s+/u', trim( (string) $title ) );
+	$stopwords = sa_event_stopwords();
+	$tokens = array();
+	foreach ( (array) $words as $w ) {
+		$w = trim( $w );
+		if ( '' === $w || mb_strlen( $w, 'UTF-8' ) < 3 || isset( $stopwords[ $w ] ) ) {
+			continue;
+		}
+		$tokens[ $w ] = true;
+	}
+	return array_keys( $tokens );
+}
+
+function sa_event_title_similarity( $title_a, $title_b ) {
+	$tokens_a = sa_event_tokenize( $title_a );
+	$tokens_b = sa_event_tokenize( $title_b );
+	if ( empty( $tokens_a ) || empty( $tokens_b ) ) {
+		return 0.0;
+	}
+	$set_a = array_flip( $tokens_a );
+	$set_b = array_flip( $tokens_b );
+	$intersection_count = count( array_intersect_key( $set_a, $set_b ) );
+	$union_count = count( $set_a ) + count( $set_b ) - $intersection_count;
+	return $union_count > 0 ? $intersection_count / $union_count : 0.0;
+}
+
+const SA_EVENT_SIMILARITY_THRESHOLD = 0.35;
+
+/**
+ * Renvoie les evenements ouverts (hors $exclude_event_id) tries par
+ * similarite de titre avec $title, au-dessus du seuil.
+ */
+function sa_event_find_similar_open( $title, $exclude_event_id = 0, $limit = 5 ) {
+	global $wpdb;
+	$rows = $wpdb->get_results( $wpdb->prepare(
+		"SELECT id, event_key, title, status, importance, category, last_updated_at
+		 FROM " . sa_event_table_events() . "
+		 WHERE merged_into IS NULL AND status NOT IN ('archived','rejected') AND id != %d
+		 ORDER BY last_updated_at DESC LIMIT 100",
+		(int) $exclude_event_id
+	) );
+	$scored = array();
+	foreach ( $rows as $r ) {
+		$score = sa_event_title_similarity( $title, $r->title );
+		if ( $score >= SA_EVENT_SIMILARITY_THRESHOLD ) {
+			$scored[] = array(
+				'event_key'       => $r->event_key,
+				'title'           => $r->title,
+				'status'          => $r->status,
+				'importance'      => $r->importance,
+				'category'        => $r->category,
+				'last_updated_at' => $r->last_updated_at,
+				'similarity'      => round( $score, 3 ),
+			);
+		}
+	}
+	usort( $scored, function ( $a, $b ) {
+		return $b['similarity'] <=> $a['similarity'];
+	} );
+	return array_slice( $scored, 0, $limit );
+}
+
 function sa_event_add_source_row( $event_id, $url, $source_name, $title, $excerpt ) {
 	global $wpdb;
 	$wpdb->insert( sa_event_table_sources(), array(
@@ -299,6 +388,38 @@ function sa_event_social_mark_posted( $id ) {
 		array( 'id' => (int) $id ),
 		array( '%s' ), array( '%d' )
 	);
+}
+
+/**
+ * Fusionne $source_key dans $target_key : toutes les sources sont
+ * reattachees, $source_key est marque merged_into (jamais supprime).
+ * Retourne WP_Error en cas de probleme, sinon true.
+ */
+function sa_event_merge( $source_key, $target_key, $actor ) {
+	global $wpdb;
+	if ( $source_key === $target_key ) {
+		return new WP_Error( 'bad_request', 'Un evenement ne peut pas fusionner avec lui-meme.', array( 'status' => 400 ) );
+	}
+	$source = sa_event_get_by_key( $source_key );
+	$target = sa_event_get_by_key( $target_key );
+	if ( ! $source || ! $target ) {
+		return new WP_Error( 'not_found', 'Evenement introuvable.', array( 'status' => 404 ) );
+	}
+
+	$wpdb->query( $wpdb->prepare(
+		"UPDATE " . sa_event_table_sources() . " SET event_id = %d WHERE event_id = %d",
+		$target->id, $source->id
+	) );
+	$wpdb->update( sa_event_table_events(),
+		array( 'merged_into' => $target->id, 'last_updated_at' => current_time( 'mysql' ) ),
+		array( 'id' => $source->id ), array( '%d', '%s' ), array( '%d' )
+	);
+	sa_event_touch( $target->id );
+
+	sa_event_log( $source->id, $actor, 'merged_into', array( 'target' => $target_key ) );
+	sa_event_log( $target->id, $actor, 'merge_received', array( 'source' => $source_key ) );
+
+	return true;
 }
 
 /**
@@ -478,27 +599,45 @@ add_action( 'rest_api_init', function () {
 	) );
 
 	// POST /find-similar { url?, title? }
-	// Deduplication deterministe (URL deja vue) + liste des evenements ouverts
-	// recents pour que l'agent ou le redacteur juge la similarite semantique.
+	// Deduplication deterministe (URL deja vue) +, si un titre est fourni,
+	// des candidats scores par recouvrement de mots (heuristique, pas une
+	// vraie similarite semantique - voir sa_event_title_similarity). Le choix
+	// final (creer / enrichir / fusionner) reste a l'agent ou au redacteur.
 	register_rest_route( 'sa-events/v1', '/find-similar', array(
 		'methods'             => 'POST',
 		'permission_callback' => $permission,
 		'callback'            => function ( WP_REST_Request $request ) {
 			global $wpdb;
-			$url = (string) $request->get_param( 'url' );
+			$url   = (string) $request->get_param( 'url' );
+			$title = (string) $request->get_param( 'title' );
 
 			$duplicate_of = $url ? sa_event_find_by_url( $url ) : null;
 
-			$rows = $wpdb->get_results(
-				"SELECT event_key, title, status, importance, category, last_updated_at
-				 FROM " . sa_event_table_events() . "
-				 WHERE merged_into IS NULL AND status NOT IN ('archived','rejected')
-				 ORDER BY last_updated_at DESC LIMIT 30"
-			);
+			if ( '' !== trim( $title ) ) {
+				$candidates = sa_event_find_similar_open( $title, 0, 10 );
+			} else {
+				$rows = $wpdb->get_results(
+					"SELECT event_key, title, status, importance, category, last_updated_at
+					 FROM " . sa_event_table_events() . "
+					 WHERE merged_into IS NULL AND status NOT IN ('archived','rejected')
+					 ORDER BY last_updated_at DESC LIMIT 30"
+				);
+				$candidates = array_map( function ( $r ) {
+					return array(
+						'event_key'       => $r->event_key,
+						'title'           => $r->title,
+						'status'          => $r->status,
+						'importance'      => $r->importance,
+						'category'        => $r->category,
+						'last_updated_at' => $r->last_updated_at,
+						'similarity'      => null,
+					);
+				}, $rows );
+			}
 
 			return array(
 				'duplicate_url_of' => $duplicate_of,
-				'open_events'      => $rows,
+				'open_events'      => $candidates,
 			);
 		},
 	) );
@@ -672,32 +811,14 @@ add_action( 'rest_api_init', function () {
 		'methods'             => 'POST',
 		'permission_callback' => $permission,
 		'callback'            => function ( WP_REST_Request $request ) use ( $shape_event ) {
-			global $wpdb;
 			$source_key = (string) $request->get_param( 'source_event_key' );
 			$target_key = (string) $request->get_param( 'target_event_key' );
-			if ( $source_key === $target_key ) {
-				return new WP_Error( 'bad_request', 'Un evenement ne peut pas fusionner avec lui-meme.', array( 'status' => 400 ) );
+			$actor      = sanitize_text_field( (string) ( $request->get_param( 'actor' ) ?: 'editor' ) );
+
+			$result = sa_event_merge( $source_key, $target_key, $actor );
+			if ( is_wp_error( $result ) ) {
+				return $result;
 			}
-			$source = sa_event_get_by_key( $source_key );
-			$target = sa_event_get_by_key( $target_key );
-			if ( ! $source || ! $target ) {
-				return new WP_Error( 'not_found', 'Evenement introuvable.', array( 'status' => 404 ) );
-			}
-
-			$actor = sanitize_text_field( (string) ( $request->get_param( 'actor' ) ?: 'editor' ) );
-
-			$wpdb->query( $wpdb->prepare(
-				"UPDATE " . sa_event_table_sources() . " SET event_id = %d WHERE event_id = %d",
-				$target->id, $source->id
-			) );
-			$wpdb->update( sa_event_table_events(),
-				array( 'merged_into' => $target->id, 'last_updated_at' => current_time( 'mysql' ) ),
-				array( 'id' => $source->id ), array( '%d', '%s' ), array( '%d' )
-			);
-			sa_event_touch( $target->id );
-
-			sa_event_log( $source->id, $actor, 'merged_into', array( 'target' => $target_key ) );
-			sa_event_log( $target->id, $actor, 'merge_received', array( 'source' => $source_key ) );
 
 			return $shape_event( sa_event_get_by_key( $target_key ), true );
 		},
@@ -848,6 +969,9 @@ function sa_event_admin_handle_post() {
 		}
 	} elseif ( 'promote' === $action && $event_key ) {
 		sa_event_promote_to_article( $event_key, $actor );
+	} elseif ( 'merge_similar' === $action && $event_key && isset( $_POST['sa_similar_key'] ) ) {
+		$similar_key = sanitize_text_field( wp_unslash( $_POST['sa_similar_key'] ) );
+		sa_event_merge( $similar_key, $event_key, $actor );
 	} elseif ( 'mark_social_posted' === $action && isset( $_POST['sa_social_id'] ) ) {
 		sa_event_social_mark_posted( (int) $_POST['sa_social_id'] );
 	}
@@ -910,6 +1034,28 @@ function sa_event_admin_page() {
 						</li>
 					<?php endforeach; ?>
 				</ul>
+
+				<?php $similar = sa_event_find_similar_open( $focused_event->title, $focused_event->id, 5 ); ?>
+				<?php if ( $similar ) : ?>
+					<h3>Doublons possibles</h3>
+					<p><small>Suggestion automatique par recouvrement de mots dans le titre (pas fiable a 100% - verifiez avant de fusionner). Fusionner rattache toutes les sources de l'evenement suggere a celui-ci ; il n'est jamais supprime, juste marque comme fusionne.</small></p>
+					<ul>
+						<?php foreach ( $similar as $cand ) : ?>
+							<li style="margin-bottom:6px;">
+								<a href="<?php echo esc_url( add_query_arg( array( 'page' => 'sa-events', 'event' => $cand['event_key'] ), admin_url( 'options-general.php' ) ) ); ?>"><?php echo esc_html( $cand['event_key'] ); ?></a>
+								— <?php echo esc_html( $cand['title'] ); ?>
+								<small>(similarite <?php echo esc_html( round( $cand['similarity'] * 100 ) ); ?>%)</small>
+								<form method="post" style="display:inline;margin-left:8px;">
+									<?php wp_nonce_field( 'sa_event_admin', 'sa_event_nonce' ); ?>
+									<input type="hidden" name="sa_event_action" value="merge_similar" />
+									<input type="hidden" name="sa_event_key" value="<?php echo esc_attr( $focused_event->event_key ); ?>" />
+									<input type="hidden" name="sa_similar_key" value="<?php echo esc_attr( $cand['event_key'] ); ?>" />
+									<?php submit_button( 'Fusionner ici', 'small', 'submit', false ); ?>
+								</form>
+							</li>
+						<?php endforeach; ?>
+					</ul>
+				<?php endif; ?>
 
 				<h3>Publications sociales preparees</h3>
 				<p><small>Preparation seulement : aucun envoi automatique. A copier-coller manuellement sur le reseau concerne.</small></p>

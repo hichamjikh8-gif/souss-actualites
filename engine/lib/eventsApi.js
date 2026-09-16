@@ -24,7 +24,7 @@ function makeEventsApi(baseUrl, secret) {
             return request(`/list${qs ? `?${qs}` : ''}`);
         },
         get: (eventKey) => request(`/get/${encodeURIComponent(eventKey)}`),
-        findSimilar: (url) => request('/find-similar', { method: 'POST', body: JSON.stringify({ url }) }),
+        findSimilar: (url, title) => request('/find-similar', { method: 'POST', body: JSON.stringify({ url, title }) }),
         create: (payload) => request('/create', { method: 'POST', body: JSON.stringify(payload) }),
         addSource: (payload) => request('/add-source', { method: 'POST', body: JSON.stringify(payload) }),
         update: (payload) => request('/update', { method: 'POST', body: JSON.stringify(payload) }),

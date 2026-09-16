@@ -22,6 +22,10 @@ Chaque source détectée doit aussi recevoir une classification d'importance : `
 3. Si contradiction : garder `contradictory`, documenter la divergence dans le résumé, ne pas trancher artificiellement.
 4. Ne jamais confirmer un événement sensible (sécurité, justice, santé, mineurs) sur la seule base d'une source non officielle — ces sujets remontent au rédacteur en chef (voir `editorial-charter.md`).
 
+## Suggestion automatique de doublons
+
+Depuis le tableau de bord (`/wp-admin → Événements (Newsroom)`) et l'outil agent `buscar_eventos_similares`, chaque événement affiche les autres événements ouverts dont le titre partage beaucoup de mots (coefficient de Jaccard sur les mots significatifs, seuil 0.35). C'est une **heuristique lexicale**, pas une compréhension du sens : elle repère bien deux titres quasi identiques sur le même fait, mais **ne fonctionne pas d'une langue à l'autre** (un article en arabe et le même fait en français auront un score de 0). Elle ne fusionne jamais rien toute seule — c'est une suggestion, la fusion reste une action manuelle (bouton "Fusionner ici", ou l'outil `fusionar_eventos`).
+
 ## Traçabilité
 
 Chaque action sur un événement (création, ajout de source, changement de statut, fusion, liaison à un flash, brouillon créé) est enregistrée dans la table `wp_sa_event_log` avec l'acteur (`agent` ou `editor:<login>`), l'action et un horodatage — consultable dans `/wp-admin → Événements (Newsroom)` ou via `GET /wp-json/sa-events/v1/get/{event_key}`.

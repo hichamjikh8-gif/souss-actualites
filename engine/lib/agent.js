@@ -92,11 +92,12 @@ const TOOLS = [
     {
         name: 'buscar_eventos_similares',
         description:
-            'Antes de crear un evento nuevo, verifica si ya existe uno sobre el mismo tema. Devuelve si la URL ya esta registrada (duplicado exacto) y la lista de eventos abiertos recientes para comparar por similitud.',
+            'Antes de crear un evento nuevo, verifica si ya existe uno sobre el mismo tema. Devuelve si la URL ya esta registrada (duplicado exacto) y, si pasas un titulo, una lista de eventos abiertos ordenada por similitud (score 0-1, heuristica por palabras en comun - no es semantica real, uses tu propio criterio ademas del score).',
         input_schema: {
             type: 'object',
             properties: {
                 url: { type: 'string', description: 'URL de la fuente que estas evaluando (si la tenes).' },
+                titulo: { type: 'string', description: 'Titulo para comparar por similitud con los eventos abiertos (recomendado).' },
             },
         },
     },
@@ -249,7 +250,7 @@ function makeAgent({ anthropicApiKey, telegram, wpApi, flashApi, eventsApi, falK
             if (!eventsApi) {
                 return JSON.stringify({ ok: false, error: 'API de eventos no configurada en el servidor.' });
             }
-            const result = await eventsApi.findSimilar(block.input.url || '');
+            const result = await eventsApi.findSimilar(block.input.url || '', block.input.titulo || '');
             return JSON.stringify({ ok: true, ...result });
         }
 
