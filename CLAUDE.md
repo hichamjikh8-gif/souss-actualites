@@ -71,11 +71,11 @@ Côté bot (`engine/lib/agent.js`), l'agent Claude dispose des outils `buscar_ev
 
 ## Veille de sources externes
 
-`engine/source-watcher.js` (process Railway `sources`, voir `engine/Procfile`) lit `engine/sources.json` et transforme chaque nouvel article RSS en événement `detected`/`unverified` via `sa-events/v1`. Aucun flash ni article n'est jamais créé automatiquement à partir de la veille. Sources actives au 2026-09-17 — 10 sources au total, toutes avec `filter_languages: true` (arabe / français / espagnol uniquement) :
+`engine/source-watcher.js` (process Railway `sources`, voir `engine/Procfile`) lit `engine/sources.json` et transforme chaque nouvel article RSS en événement `detected`/`unverified` via `sa-events/v1`. Aucun flash ni article n'est jamais créé automatiquement à partir de la veille. Sources actives au 2026-09-17 — 12 sources au total, toutes avec `filter_languages: true` (arabe / français / espagnol uniquement) :
 
 **Actualité générale :** Agadir24 (locale, syndication ✅), La Nouvelle Tribune (nationale, syndication ✅), Aujourd'hui le Maroc (nationale, syndication ✅), Hespress (nationale, syndication ❌ — événements créés sans publication auto).
 
-**Sport / Football :** MarocFoot (syndication ✅), Le360 Sport (syndication ✅), Foot Mercato (syndication ✅, joueurs marocains en Europe), Kooora arabe (syndication ✅), Goal.com arabe (syndication ✅), L'Equipe (syndication ❌, volume élevé — événements newsroom uniquement).
+**Sport / Football :** MarocFoot (syndication ✅), Le360 Sport (syndication ✅), Foot Mercato (syndication ✅, joueurs marocains en Europe), Kooora arabe (syndication ✅), Goal.com arabe (syndication ✅), FilGoal (syndication ✅, référence arabe pour les breaking news foot), Yalla Kora (syndication ✅, breaking news foot arabe/maghrébin), L'Equipe (syndication ❌, volume élevé — événements newsroom uniquement).
 
 **Ce service ne peut fonctionner qu'une fois le mu-plugin `sa-event-engine.php` réellement déployé en production** (voir la note push/staging plus haut).
 
