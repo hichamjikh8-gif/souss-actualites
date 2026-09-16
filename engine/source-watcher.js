@@ -94,7 +94,11 @@ async function processItem(source, item) {
             },
         });
         console.log(`[${source.name}] Nouvel evenement ${created.event_key} : ${title}`);
-        await notifyAdmin(`🔎 Nouvel evenement detecte (${source.category})\n${created.event_key} — ${title}\nSource : ${source.name}\n${url}`);
+        // Pas de notification Telegram ici : la veille cree des evenements en
+        // continu (bruit attendu, voir docs/newsroom/verification-procedures.md),
+        // ce serait trop de messages. Seuls les evenements marques "important"
+        // (par un editeur ou par l'agent) declenchent une alerte - voir
+        // notifyImportantEvents() plus bas, appelee a chaque tick.
     } catch (err) {
         if (err.eventKey) {
             // URL deja connue : deja rattachee a un evenement existant, rien a faire.
@@ -131,15 +135,42 @@ async function checkSource(source) {
     }
 }
 
+const IMPORTANT_NOTIFIED_KEY = '_notified-important';
+
+/**
+ * Alerte Telegram uniquement pour les evenements marques "important" - par un
+ * editeur depuis /wp-admin, ou par l'agent via actualizar_evento. La veille
+ * elle-meme ne cree jamais d'evenement "important" (toujours "to_watch" par
+ * defaut), donc ceci ne notifie que ce qui a reellement ete juge important
+ * par un humain ou par l'agent sur demande explicite - jamais la detection
+ * brute. Verifie a chaque tick, quelle que soit la source du changement.
+ */
+async function notifyImportantEvents() {
+    if (!telegram || !ADMIN_TELEGRAM_ID) return;
+    const notified = loadSeen(IMPORTANT_NOTIFIED_KEY);
+    try {
+        const events = await eventsApi.list({ importance: 'important', limit: 50 });
+        const fresh = events.filter((e) => !notified.has(e.event_key));
+        for (const e of fresh) {
+            await notifyAdmin(`⚠️ Evenement important : ${e.title}\n${e.event_key} — statut ${e.status}, confiance ${e.confidence}\nhttps://souss-actualites.com/wp-admin/options-general.php?page=sa-events&event=${e.event_key}`);
+            notified.add(e.event_key);
+        }
+        if (fresh.length) saveSeen(IMPORTANT_NOTIFIED_KEY, notified);
+    } catch (err) {
+        console.error('Echec verification des evenements importants:', err.message);
+    }
+}
+
 async function tick() {
     const sources = loadSources().filter((s) => s.enabled);
     if (!sources.length) {
         console.log('Aucune source activee dans sources.json.');
-        return;
+    } else {
+        for (const source of sources) {
+            await checkSource(source);
+        }
     }
-    for (const source of sources) {
-        await checkSource(source);
-    }
+    await notifyImportantEvents();
 }
 
 function main() {
