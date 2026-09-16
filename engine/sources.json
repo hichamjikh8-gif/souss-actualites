@@ -37,74 +37,92 @@
   },
   {
     "name": "MarocFoot",
-    "url": "https://www.marocfoot.com/feed",
+    "url": "https://marocfoot.net/feed/",
     "category": "sport",
     "enabled": true,
     "publish_to_sa": true,
     "filter_languages": true,
-    "note": "Football marocain : equipe nationale, Botola Pro, joueurs marocains en Europe. Source 100% dediee au foot marocain."
-  },
-  {
-    "name": "Le360 Sport",
-    "url": "https://sport.le360.ma/feed",
-    "category": "sport",
-    "enabled": true,
-    "publish_to_sa": true,
-    "filter_languages": true,
-    "note": "Section sport du portail marocain Le360 : football, athletes marocains, transferts, competitions nationales et internationales."
+    "note": "Football marocain : equipe nationale, Botola Pro, joueurs marocains en Europe. Domaine migre de marocfoot.com vers marocfoot.net — mis a jour le 2026-09-17."
   },
   {
     "name": "Foot Mercato",
-    "url": "https://www.footmercato.net/feed",
+    "url": "https://www.footmercato.net/flux-rss",
     "category": "sport",
     "enabled": true,
     "publish_to_sa": true,
     "filter_languages": true,
-    "note": "Actualite mercato et football europeen en francais. Couvre en detail les joueurs marocains (Hakimi, Ziyech, En-Nesyri, Ounahi, Mazraoui, Saiss...). Filtre langue actif."
+    "note": "Actualite mercato et football europeen en francais. Couvre en detail les joueurs marocains (Hakimi, Ziyech, En-Nesyri, Ounahi, Mazraoui, Saiss...). URL corrigee le 2026-09-17 : /flux-rss au lieu de /feed."
+  },
+  {
+    "name": "AlMaghrebSport",
+    "url": "https://almaghrebsport.com/feed/",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Journal sportif marocain en arabe : Botola Pro, Lions de l'Atlas, Wydad, Raja, joueurs marocains a l'etranger. Ajoute le 2026-09-17 en remplacement des sources arabes non disponibles."
+  },
+  {
+    "name": "Hespress Sport",
+    "url": "https://hespress.com/category/sport/feed",
+    "category": "sport",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Rubrique sport de Hespress : actualite sportive marocaine et internationale en arabe. Couvre Lions de l'Atlas, joueurs en Europe, Botola. Ajoute le 2026-09-17."
   },
   {
     "name": "L'Equipe",
     "url": "https://www.lequipe.fr/rss/actu_rss.xml",
     "category": "sport",
-    "enabled": true,
+    "enabled": false,
     "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Grand quotidien sportif francais : Ligue des Champions, transferts, CAN, Coupe du Monde. Volume tres eleve — syndication desactivee par defaut, evenements crees pour la newsroom."
+    "note": "Grand quotidien sportif francais. Desactive le 2026-09-17 : serveur retourne 403 (blocage automatique). Conserver pour reactivation future si le flux redevient accessible."
+  },
+  {
+    "name": "Le360 Sport",
+    "url": "https://sport.le360.ma/feed",
+    "category": "sport",
+    "enabled": false,
+    "publish_to_sa": false,
+    "filter_languages": true,
+    "note": "Desactive le 2026-09-17 : flux RSS supprime (404). Le site a migre vers un CMS sans support RSS natif. Conserver pour reactivation si un flux est retabli."
   },
   {
     "name": "Kooora",
     "url": "https://ar.kooora.com/?feed=rss2",
     "category": "sport",
-    "enabled": true,
-    "publish_to_sa": true,
+    "enabled": false,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Premier portail football arabe du Maghreb/Moyen-Orient. Couvre les equipes du Maghreb, Liga, Premier League, Champions League en arabe. Filtre langue actif (arabe uniquement)."
+    "note": "Desactive le 2026-09-17 : DNS ENOTFOUND sur ar.kooora.com, aucun flux RSS trouve sur www.kooora.com. Le site ne semble plus exposer de flux RSS."
   },
   {
     "name": "Goal.com Arabe",
     "url": "https://www.goal.com/ar/feeds/rss",
     "category": "sport",
-    "enabled": true,
-    "publish_to_sa": true,
+    "enabled": false,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Goal.com version arabe : transferts, grandes competitions europeennes, equipes nationales africaines. Couvre beaucoup les Lions de l'Atlas."
+    "note": "Desactive le 2026-09-17 : flux RSS supprime (404). Goal.com a abandonne les flux RSS au profit de son API proprietaire."
   },
   {
     "name": "FilGoal",
-    "url": "https://www.filgoal.com/feed/",
+    "url": "https://www.filgoal.com/home/rss",
     "category": "sport",
-    "enabled": true,
-    "publish_to_sa": true,
+    "enabled": false,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Reference absolue du football arabe — premier a publier les infos mercato, compositions, resultats. Tres suivi au Maghreb. Couvre intensement les joueurs marocains en Europe et la selection nationale."
+    "note": "Desactive le 2026-09-17 : site bloque les requetes automatiques (timeout 60s). URL correcte identifiee mais acces refuse. Reactiver si le blocage est leve."
   },
   {
     "name": "Yalla Kora",
     "url": "https://www.yallakora.com/feed/",
     "category": "sport",
-    "enabled": true,
-    "publish_to_sa": true,
+    "enabled": false,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Grand portail sport arabe (Egypte/Maghreb) : breaking news football, transferts en temps reel, couverture Lions de l'Atlas, Botola, Champions League, World Cup. Parmi les plus rapides en arabe."
+    "note": "Desactive le 2026-09-17 : /feed/ retourne du HTML (pas de RSS). Le site n'expose pas de flux RSS standard."
   }
 ]
