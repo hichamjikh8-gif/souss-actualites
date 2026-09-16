@@ -563,9 +563,23 @@ function sa_event_related_published_posts( $title, $limit = 3 ) {
  * ---------------------------------------------------------------------------
  */
 
+/**
+ * Accepte la cle soit comme constante PHP (define() dans WORDPRESS_CONFIG_EXTRA,
+ * comme SOUSS_BOT_SECRET), soit comme variable d'environnement brute du
+ * conteneur (getenv()) - selon la maniere dont Hicham l'a ajoutee dans
+ * Railway. Retourne null si absente des deux.
+ */
+function sa_event_stock_photo_key( $name ) {
+	if ( defined( $name ) && '' !== constant( $name ) ) {
+		return constant( $name );
+	}
+	$env = getenv( $name );
+	return ( false !== $env && '' !== $env ) ? $env : null;
+}
+
 function sa_event_stock_photo_configured() {
-	return ( defined( 'PEXELS_API_KEY' ) && PEXELS_API_KEY !== '' )
-		|| ( defined( 'UNSPLASH_ACCESS_KEY' ) && UNSPLASH_ACCESS_KEY !== '' );
+	return null !== sa_event_stock_photo_key( 'PEXELS_API_KEY' )
+		|| null !== sa_event_stock_photo_key( 'UNSPLASH_ACCESS_KEY' );
 }
 
 function sa_event_stock_photo_query( $title ) {
@@ -576,7 +590,7 @@ function sa_event_stock_photo_query( $title ) {
 	return implode( ' ', array_slice( $tokens, 0, 4 ) );
 }
 
-function sa_event_search_pexels( $query ) {
+function sa_event_search_pexels( $query, $api_key ) {
 	$response = wp_remote_get(
 		'https://api.pexels.com/v1/search?' . http_build_query( array(
 			'query'       => $query,
@@ -585,7 +599,7 @@ function sa_event_search_pexels( $query ) {
 		) ),
 		array(
 			'timeout' => 15,
-			'headers' => array( 'Authorization' => PEXELS_API_KEY ),
+			'headers' => array( 'Authorization' => $api_key ),
 		)
 	);
 	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) >= 300 ) {
@@ -604,7 +618,7 @@ function sa_event_search_pexels( $query ) {
 	);
 }
 
-function sa_event_search_unsplash( $query ) {
+function sa_event_search_unsplash( $query, $access_key ) {
 	$response = wp_remote_get(
 		'https://api.unsplash.com/search/photos?' . http_build_query( array(
 			'query'       => $query,
@@ -613,7 +627,7 @@ function sa_event_search_unsplash( $query ) {
 		) ),
 		array(
 			'timeout' => 15,
-			'headers' => array( 'Authorization' => 'Client-ID ' . UNSPLASH_ACCESS_KEY ),
+			'headers' => array( 'Authorization' => 'Client-ID ' . $access_key ),
 		)
 	);
 	if ( is_wp_error( $response ) || wp_remote_retrieve_response_code( $response ) >= 300 ) {
@@ -635,21 +649,25 @@ function sa_event_search_unsplash( $query ) {
 }
 
 function sa_event_search_stock_photo( $title ) {
-	if ( ! sa_event_stock_photo_configured() ) {
-		return null;
-	}
 	$query = sa_event_stock_photo_query( $title );
 	if ( '' === $query ) {
 		return null;
 	}
-	if ( defined( 'PEXELS_API_KEY' ) && PEXELS_API_KEY !== '' ) {
-		$photo = sa_event_search_pexels( $query );
+	$pexels_key = sa_event_stock_photo_key( 'PEXELS_API_KEY' );
+	error_log( sprintf(
+		'[sa-event-engine] recherche photo pour "%s" (requete: "%s") - PEXELS_API_KEY trouvee: %s',
+		$title, $query, $pexels_key ? 'oui' : 'non'
+	) );
+	if ( $pexels_key ) {
+		$photo = sa_event_search_pexels( $query, $pexels_key );
+		error_log( '[sa-event-engine] Pexels : ' . ( $photo ? 'photo trouvee (' . $photo['credit_name'] . ')' : 'aucun resultat / echec' ) );
 		if ( $photo && ! empty( $photo['image_url'] ) ) {
 			return $photo;
 		}
 	}
-	if ( defined( 'UNSPLASH_ACCESS_KEY' ) && UNSPLASH_ACCESS_KEY !== '' ) {
-		$photo = sa_event_search_unsplash( $query );
+	$unsplash_key = sa_event_stock_photo_key( 'UNSPLASH_ACCESS_KEY' );
+	if ( $unsplash_key ) {
+		$photo = sa_event_search_unsplash( $query, $unsplash_key );
 		if ( $photo && ! empty( $photo['image_url'] ) ) {
 			return $photo;
 		}
@@ -673,6 +691,7 @@ function sa_event_attach_featured_image( $post_id, $photo ) {
 
 	$tmp = download_url( $photo['image_url'], 15 );
 	if ( is_wp_error( $tmp ) ) {
+		error_log( '[sa-event-engine] echec telechargement image : ' . $tmp->get_error_message() );
 		return false;
 	}
 
@@ -687,16 +706,19 @@ function sa_event_attach_featured_image( $post_id, $photo ) {
 
 	if ( is_wp_error( $attach_id ) ) {
 		@unlink( $tmp );
+		error_log( '[sa-event-engine] echec attachement image : ' . $attach_id->get_error_message() );
 		return false;
 	}
 
 	update_post_meta( $attach_id, '_sa_stock_photo_credit', sanitize_text_field( $photo['credit_name'] . ' / ' . $photo['source_label'] ) );
 	set_post_thumbnail( $post_id, $attach_id );
+	error_log( sprintf( '[sa-event-engine] image a la une attachee (post #%d, attachment #%d, %s)', $post_id, $attach_id, $photo['source_label'] ) );
 
-	if ( ! empty( $photo['download_tracking_url'] ) && defined( 'UNSPLASH_ACCESS_KEY' ) ) {
+	$unsplash_key = sa_event_stock_photo_key( 'UNSPLASH_ACCESS_KEY' );
+	if ( ! empty( $photo['download_tracking_url'] ) && $unsplash_key ) {
 		wp_remote_get( $photo['download_tracking_url'], array(
 			'timeout' => 10,
-			'headers' => array( 'Authorization' => 'Client-ID ' . UNSPLASH_ACCESS_KEY ),
+			'headers' => array( 'Authorization' => 'Client-ID ' . $unsplash_key ),
 		) );
 	}
 
