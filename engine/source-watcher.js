@@ -132,7 +132,7 @@ async function processItem(source, item) {
         }
     }
 
-    // ── Syndication automatique ───────────────────────────────────────────────
+    // ── Syndication automatique ──────────────────────────────────────────────
     // Si la source est marquee publish_to_sa et que cet article n'a pas encore
     // ete publie sur Souss Actualites, on le publie maintenant.
     if (source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey)) {
@@ -155,6 +155,24 @@ async function processItem(source, item) {
     return true;
 }
 
+// Retourne true si le texte semble etre en arabe, francais ou espagnol.
+// Utilise quand source.filter_languages est true pour ignorer les articles
+// en anglais (ou toute autre langue hors perimetre editorial).
+function isEditorialLanguage(text) {
+    if (!text) return true; // pas de titre = on laisse passer, sera rejete plus loin
+    // Arabe : plage Unicode U+0600-U+06FF
+    if (/[؀-ۿ]/.test(text)) return true;
+    // Espagnol specifique : n tilde, ponctuation inversee
+    if (/[ñÑ¡¿]/.test(text)) return true;
+    // Francais/Espagnol : diacritiques latins communs aux deux langues
+    if (/[À-ÿ]/.test(text)) return true;
+    // Mots grammaticaux francais courants (sans accent)
+    if (/\b(le|la|les|de|du|des|un|une|au|aux|et|est|pour|dans|sur|avec|par|qui|que|se|en|il|elle|ils|elles|nous|vous|ce|cette|ces|son|sa|ses|leur|leurs|mais|ou|donc|or|ni|car)\b/i.test(text)) return true;
+    // Mots grammaticaux espagnols courants (sans accent)
+    if (/\b(el|los|las|del|una|con|por|para|como|pero|mas|sin|sobre|entre|cuando|tambien|hay|puede|han|fue|ser|los)\b/i.test(text)) return true;
+    return false;
+}
+
 async function checkSource(source) {
     if (!source.url || !source.name) {
         console.error('Source mal configuree (name/url manquant), ignoree:', source);
@@ -163,7 +181,25 @@ async function checkSource(source) {
     const seen = loadSeen(source.name);
     try {
         const feed = await parser.parseURL(source.url);
-        const newItems = feed.items.filter((item) => item.link && !seen.has(item.link)).reverse();
+        let newItems = feed.items.filter((item) => item.link && !seen.has(item.link)).reverse();
+
+        // Filtre langue : si la source demande filter_languages, on ignore les articles
+        // dont le titre ne ressemble ni au francais ni a l'arabe.
+        if (source.filter_languages) {
+            const before = newItems.length;
+            newItems = newItems.filter((item) => {
+                const ok = isEditorialLanguage((item.title || '').toString());
+                if (!ok) {
+                    console.log(`[${source.name}] Article ignore (langue hors perimetre) : "${(item.title || '').toString().slice(0, 80)}"`);
+                    // On marque quand meme l'URL comme vue pour ne pas la retraiter
+                    seen.add(item.link);
+                }
+                return ok;
+            });
+            if (newItems.length < before) {
+                saveSeen(source.name, seen); // persiste les URLs ignorees
+            }
+        }
 
         let handledCount = 0;
         for (const item of newItems) {
