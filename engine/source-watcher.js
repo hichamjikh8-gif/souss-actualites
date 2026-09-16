@@ -72,13 +72,20 @@ async function notifyAdmin(text) {
     }
 }
 
+/**
+ * Traite un article. Retourne true si l'article a ete gere (evenement cree,
+ * ou URL deja connue - dans les deux cas inutile de reessayer plus tard) et
+ * false en cas d'echec transitoire (ex: site indisponible pendant un
+ * redeploiement) - l'appelant ne doit PAS marquer l'item comme "vu" dans ce
+ * cas, pour que le prochain tick le retente au lieu de le perdre.
+ */
 async function processItem(source, item) {
     const url = item.link;
-    if (!url) return;
+    if (!url) return true; // rien a traiter, pas la peine de reessayer
 
     const excerpt = (item.contentSnippet || item.content || '').toString().slice(0, 500);
     const title = (item.title || '').toString().trim().slice(0, 500);
-    if (!title) return;
+    if (!title) return true;
 
     try {
         // Verifie AVANT de creer si un evenement ouvert ressemble deja a ce
@@ -118,13 +125,17 @@ async function processItem(source, item) {
         // ce serait trop de messages. Seuls les evenements marques "important"
         // (par un editeur ou par l'agent) declenchent une alerte - voir
         // notifyImportantEvents() plus bas, appelee a chaque tick.
+        return true;
     } catch (err) {
         if (err.eventKey) {
             // URL deja connue : deja rattachee a un evenement existant, rien a faire.
             console.log(`[${source.name}] URL deja suivie (evenement ${err.eventKey}), ignoree.`);
-            return;
+            return true;
         }
-        console.error(`[${source.name}] Echec creation evenement pour "${title}":`, err.message);
+        // Echec transitoire probable (site indisponible, timeout...) : on ne
+        // marque PAS l'item comme vu, il sera retente au prochain tick.
+        console.error(`[${source.name}] Echec creation evenement pour "${title}" (sera retente) :`, err.message);
+        return false;
     }
 }
 
@@ -138,14 +149,20 @@ async function checkSource(source) {
         const feed = await parser.parseURL(source.url);
         const newItems = feed.items.filter((item) => item.link && !seen.has(item.link)).reverse();
 
+        let handledCount = 0;
         for (const item of newItems) {
-            await processItem(source, item);
-            seen.add(item.link);
+            const handled = await processItem(source, item);
+            if (handled) {
+                seen.add(item.link);
+                handledCount++;
+            }
         }
 
-        if (newItems.length > 0) {
+        if (handledCount > 0) {
             saveSeen(source.name, seen);
-            console.log(`[${source.name}] ${newItems.length} nouvel(le)(s) article(s) traite(s).`);
+        }
+        if (newItems.length > 0) {
+            console.log(`[${source.name}] ${handledCount}/${newItems.length} nouvel(le)(s) article(s) traite(s)${handledCount < newItems.length ? ' (le reste sera retente au prochain cycle)' : ''}.`);
         } else {
             console.log(`[${source.name}] Aucun nouvel article.`);
         }
