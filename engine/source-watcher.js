@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { makeEventsApi } = require('./lib/eventsApi');
 const { makeTelegramClient } = require('./lib/telegram');
+const { loadSyndicated, saveSyndicated, publishSyndicatedArticle } = require('./syndication-publisher');
 
 // Veille de sources externes : lit engine/sources.json (categorie local/national/
 // international, activee ou non) et transforme chaque nouvel article en EVENEMENT
@@ -10,19 +11,27 @@ const { makeTelegramClient } = require('./lib/telegram');
 // article. Le classement importance/confiance reste a "to_watch"/"unverified" par
 // defaut : c'est au redacteur en chef (ou a l'agent, sur sa demande explicite)
 // de le faire evoluer depuis /wp-admin ou Telegram. Voir docs/newsroom/verification-procedures.md.
+//
+// SYNDICATION : si la source a "publish_to_sa: true" dans sources.json, chaque
+// nouvel article est aussi publie automatiquement sur souss-actualites.com avec
+// attribution du journal source + photo originale (via souss-bot/v1/syndicate,
+// meme X-Bot-Secret que le reste de l'API — aucun Application Password requis).
 
 const WP_BASE_URL = process.env.WP_BASE_URL || 'https://souss-actualites.com';
 const BOT_API_SECRET = process.env.BOT_API_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID ? String(process.env.ADMIN_TELEGRAM_ID) : null;
 const CHECK_INTERVAL_MS = parseInt(process.env.SOURCE_CHECK_INTERVAL_MS || '600000', 10); // 10 minutes
-const IMPORTANT_CHECK_INTERVAL_MS = parseInt(process.env.IMPORTANT_CHECK_INTERVAL_MS || '60000', 10); // 1 minute : verifie plus souvent que le flux RSS pour que le clic "important" de Hicham declenche vite l'alerte Telegram
+const IMPORTANT_CHECK_INTERVAL_MS = parseInt(process.env.IMPORTANT_CHECK_INTERVAL_MS || '60000', 10); // 1 minute
 const SOURCES_FILE = process.env.SOURCES_CONFIG_FILE || path.join(__dirname, 'sources.json');
 const SEEN_DIR = path.join(__dirname, '.seen-sources');
 
 const parser = new Parser();
 const telegram = TELEGRAM_BOT_TOKEN ? makeTelegramClient(TELEGRAM_BOT_TOKEN) : null;
 const eventsApi = BOT_API_SECRET ? makeEventsApi(WP_BASE_URL, BOT_API_SECRET) : null;
+
+// Ensemble des event_keys deja syndicques (persist sur disque)
+let syndicated = loadSyndicated();
 
 function loadSources() {
     let raw;
@@ -74,27 +83,19 @@ async function notifyAdmin(text) {
 
 /**
  * Traite un article. Retourne true si l'article a ete gere (evenement cree,
- * ou URL deja connue - dans les deux cas inutile de reessayer plus tard) et
- * false en cas d'echec transitoire (ex: site indisponible pendant un
- * redeploiement) - l'appelant ne doit PAS marquer l'item comme "vu" dans ce
- * cas, pour que le prochain tick le retente au lieu de le perdre.
+ * ou URL deja connue) et false en cas d'echec transitoire.
  */
 async function processItem(source, item) {
     const url = item.link;
-    if (!url) return true; // rien a traiter, pas la peine de reessayer
+    if (!url) return true;
 
     const excerpt = (item.contentSnippet || item.content || '').toString().slice(0, 500);
     const title = (item.title || '').toString().trim().slice(0, 500);
     if (!title) return true;
 
+    let eventKey = null;
+
     try {
-        // Verifie AVANT de creer si un evenement ouvert ressemble deja a ce
-        // titre (heuristique cote serveur, voir sa_event_title_similarity dans
-        // sa-event-engine.php). On cree quand meme l'evenement - la veille ne
-        // fusionne jamais toute seule, c'est un signal pour /wp-admin ou
-        // l'agent (fusionar_eventos) - mais on le note dans les logs pour
-        // qu'un doublon evident (meme fait rapporte par une autre source) ne
-        // passe pas inaperçu.
         let similarWarning = '';
         try {
             const similar = await eventsApi.findSimilar(url, title);
@@ -103,7 +104,7 @@ async function processItem(source, item) {
                 similarWarning = ` (ressemble a ${best.event_key} : "${best.title}", similarite ${Math.round(best.similarity * 100)}%)`;
             }
         } catch (simErr) {
-            // Non bloquant : la creation continue meme si la verification echoue.
+            // Non bloquant
         }
 
         const created = await eventsApi.create({
@@ -119,24 +120,39 @@ async function processItem(source, item) {
                 excerpt,
             },
         });
-        console.log(`[${source.name}] Nouvel evenement ${created.event_key} : ${title}${similarWarning}`);
-        // Pas de notification Telegram ici : la veille cree des evenements en
-        // continu (bruit attendu, voir docs/newsroom/verification-procedures.md),
-        // ce serait trop de messages. Seuls les evenements marques "important"
-        // (par un editeur ou par l'agent) declenchent une alerte - voir
-        // notifyImportantEvents() plus bas, appelee a chaque tick.
-        return true;
+        eventKey = created.event_key;
+        console.log(`[${source.name}] Nouvel evenement ${eventKey} : ${title}${similarWarning}`);
     } catch (err) {
         if (err.eventKey) {
-            // URL deja connue : deja rattachee a un evenement existant, rien a faire.
-            console.log(`[${source.name}] URL deja suivie (evenement ${err.eventKey}), ignoree.`);
-            return true;
+            eventKey = err.eventKey; // URL deja connue → on connait quand meme l'event_key
+            console.log(`[${source.name}] URL deja suivie (evenement ${eventKey}), ignoree.`);
+        } else {
+            console.error(`[${source.name}] Echec creation evenement pour "${title}" (sera retente) :`, err.message);
+            return false;
         }
-        // Echec transitoire probable (site indisponible, timeout...) : on ne
-        // marque PAS l'item comme vu, il sera retente au prochain tick.
-        console.error(`[${source.name}] Echec creation evenement pour "${title}" (sera retente) :`, err.message);
-        return false;
     }
+
+    // ── Syndication automatique ───────────────────────────────────────────────
+    // Si la source est marquee publish_to_sa et que cet article n'a pas encore
+    // ete publie sur Souss Actualites, on le publie maintenant.
+    if (source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey)) {
+        try {
+            const result = await publishSyndicatedArticle(source, item, eventKey, WP_BASE_URL, BOT_API_SECRET);
+            if (result) {
+                syndicated.add(eventKey);
+                saveSyndicated(syndicated);
+                // Notification Telegram admin (optionnel - non bloquant)
+                await notifyAdmin(
+                    `📰 Syndication : "${title}"\nSource : ${source.name}\n🔗 ${result.post_url}`
+                ).catch(() => {});
+            }
+        } catch (err) {
+            // Echec de syndication : non bloquant, l'evenement est quand meme marque vu
+            console.error(`[syndicator] Echec publication "${title}" (${source.name}):`, err.message);
+        }
+    }
+
+    return true;
 }
 
 async function checkSource(source) {
@@ -173,14 +189,6 @@ async function checkSource(source) {
 
 const IMPORTANT_NOTIFIED_KEY = '_notified-important';
 
-/**
- * Alerte Telegram uniquement pour les evenements marques "important" - par un
- * editeur depuis /wp-admin, ou par l'agent via actualizar_evento. La veille
- * elle-meme ne cree jamais d'evenement "important" (toujours "to_watch" par
- * defaut), donc ceci ne notifie que ce qui a reellement ete juge important
- * par un humain ou par l'agent sur demande explicite - jamais la detection
- * brute. Verifie a chaque tick, quelle que soit la source du changement.
- */
 async function notifyImportantEvents() {
     if (!telegram || !ADMIN_TELEGRAM_ID) return;
     const notified = loadSeen(IMPORTANT_NOTIFIED_KEY);
@@ -215,17 +223,22 @@ function main() {
     }
     const sources = loadSources();
     const active = sources.filter((s) => s.enabled).map((s) => `${s.name} (${s.category})`);
+    const syndicable = sources.filter((s) => s.enabled && s.publish_to_sa).map((s) => s.name);
+
     console.log('Demarrage de la veille de sources externes (Souss Actualites)');
     console.log(`Sources activees : ${active.length ? active.join(', ') : '(aucune)'}`);
     console.log(`Frequence flux RSS : toutes les ${CHECK_INTERVAL_MS / 1000} secondes`);
     console.log(`Frequence verification "important" : toutes les ${IMPORTANT_CHECK_INTERVAL_MS / 1000} secondes`);
 
+    if (BOT_API_SECRET && syndicable.length) {
+        console.log(`Syndication automatique active pour : ${syndicable.join(', ')}`);
+    } else if (!BOT_API_SECRET) {
+        console.log('Syndication desactivee (BOT_API_SECRET manquant).');
+    }
+
     tick();
     setInterval(tick, CHECK_INTERVAL_MS);
 
-    // Intervalle separe et plus rapproche : quand Hicham coche "important"
-    // dans /wp-admin (ou que l'agent le fait), l'alerte Telegram part vite,
-    // sans attendre le prochain cycle du flux RSS.
     notifyImportantEvents();
     setInterval(notifyImportantEvents, IMPORTANT_CHECK_INTERVAL_MS);
 }
