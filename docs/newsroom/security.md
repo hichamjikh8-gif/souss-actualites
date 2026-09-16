@@ -4,7 +4,7 @@
 
 Aucun secret en dur dans le code, jamais. Tout passe par les variables d'environnement des services Railway :
 
-- `souss-actualites` (WordPress) : `WORDPRESS_DB_HOST`, `WORDPRESS_DB_NAME`, `WORDPRESS_DB_USER`, `WORDPRESS_DB_PASSWORD`, `WORDPRESS_CONFIG_EXTRA` (contient notamment la constante `SOUSS_BOT_SECRET`).
+- `souss-actualites` (WordPress) : `WORDPRESS_DB_HOST`, `WORDPRESS_DB_NAME`, `WORDPRESS_DB_USER`, `WORDPRESS_DB_PASSWORD`, `WORDPRESS_CONFIG_EXTRA` (contient `SOUSS_BOT_SECRET`, et optionnellement `FACEBOOK_PAGE_ID` / `FACEBOOK_PAGE_ACCESS_TOKEN` / `X_BEARER_TOKEN` si la publication reelle Facebook/X est activee - absents aujourd'hui, donc ces canaux restent en preparation manuelle).
 - `web` (bot) : `ADMIN_TELEGRAM_ID`, `ANTHROPIC_API_KEY`, `BOT_API_SECRET`, `CLAUDE_MODEL`, `FAL_KEY`, `TELEGRAM_BOT_TOKEN`, `WEBHOOK_URL`, `WP_BASE_URL`.
 - `external-monitor` : `RAILWAY_TOKEN` (permet un redémarrage contrôlé du service `souss-actualites` en cas de panne détectée), `TELEGRAM_BOT_TOKEN`, `TARGET_URL`, seuils d'alerte.
 - `.github/workflows/deploy.yml` : `RAILWAY_TOKEN`, `RAILWAY_PROJECT_ID`, `RAILWAY_SERVICE_ID` en secrets GitHub Actions.

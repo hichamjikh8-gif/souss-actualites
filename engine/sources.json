@@ -19,5 +19,12 @@
     "category": "national",
     "enabled": true,
     "note": "Verifie le 2026-09-16 : flux valide, francophone, plutot economie/actualite generale. Active le 2026-09-16 sur demande du redacteur en chef (phase nationale)."
+  },
+  {
+    "name": "Aujourd'hui le Maroc",
+    "url": "https://aujourdhui.ma/feed",
+    "category": "national",
+    "enabled": true,
+    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, francophone, mise a jour horaire. MAP (agence officielle) et L'Economiste cherches mais pas de flux RSS fonctionnel trouve (403 / pas de flux reel) - pas ajoutes pour eviter une URL non verifiee."
   }
 ]

@@ -12,8 +12,8 @@ Chaque canal a son propre format. Rien n'est publié automatiquement sur un rés
 | Telegram (rédacteur en chef) | Bot de pilotage : stats, brouillons, publication, commentaires, agent conversationnel | `engine/server.js`, `engine/lib/agent.js` |
 | Flash Breaking News (bandeau site) | Publication manuelle via le bot, à la demande explicite du rédacteur en chef | `sa-flash-manager.php` |
 | RSS | Natif WordPress (`/feed/`), déjà consommé par le worker | — |
-| Facebook | **Préparation seulement** : l'agent peut rédiger un texte adapté et le stocker (`sa_event_social_posts`), mais aucune API Facebook n'est connectée — publication manuelle par copier-coller depuis `/wp-admin` | `sa-event-engine.php` (table `sa_event_social_posts`) |
-| X (Twitter) | Préparation seulement, même mécanisme que Facebook | idem |
+| Facebook | Préparation toujours en premier lieu. Publication réelle possible (Graph API `/{page-id}/feed`) **si** `FACEBOOK_PAGE_ID` et `FACEBOOK_PAGE_ACCESS_TOKEN` sont définis dans `WORDPRESS_CONFIG_EXTRA` — sinon le bouton "Publier maintenant" n'apparaît même pas dans `/wp-admin`, retour au copier-coller manuel. **Non testé contre de vrais identifiants** (aucun n'existe sur ce projet au moment de l'écriture) : à vérifier avec un premier post à faible enjeu avant d'en dépendre. | `sa-event-engine.php` (`sa_event_social_publish_to_channel`) |
+| X (Twitter) | Même principe. Nécessite `X_BEARER_TOKEN` (token utilisateur OAuth2, API v2 `/2/tweets`). Même avertissement : non testé faute d'identifiants. | idem |
 | Newsletter | Préparation seulement (texte de blurb), pas de service d'envoi configuré | idem |
 
 ## Format par canal (quand l'agent rédige un texte)

@@ -357,8 +357,11 @@ function sa_event_add_source_row( $event_id, $url, $source_name, $title, $excerp
 
 /**
  * Enregistre un texte pret pour un canal social (Facebook/X/Telegram/newsletter).
- * N'envoie jamais rien : c'est une preparation, la publication reelle sur le
- * reseau est manuelle (aucune API Facebook/X n'est connectee a ce projet).
+ * N'envoie RIEN automatiquement : c'est une preparation. La publication reelle
+ * n'a lieu que si le redacteur en chef clique explicitement "Publier
+ * maintenant" (sa_event_social_publish_to_channel ci-dessous), et seulement
+ * si les identifiants du canal sont configures (sinon le bouton n'apparait
+ * meme pas). Sans configuration : copier-coller manuel, comme avant.
  */
 function sa_event_social_add( $event_id, $channel, $content, $created_by ) {
 	global $wpdb;
@@ -371,6 +374,13 @@ function sa_event_social_add( $event_id, $channel, $content, $created_by ) {
 		'created_at' => current_time( 'mysql' ),
 	), array( '%d', '%s', '%s', '%s', '%s', '%s' ) );
 	return (int) $wpdb->insert_id;
+}
+
+function sa_event_social_get( $id ) {
+	global $wpdb;
+	return $wpdb->get_row( $wpdb->prepare(
+		"SELECT * FROM " . sa_event_table_social() . " WHERE id = %d", (int) $id
+	) );
 }
 
 function sa_event_social_list( $event_id ) {
@@ -388,6 +398,88 @@ function sa_event_social_mark_posted( $id ) {
 		array( 'id' => (int) $id ),
 		array( '%s' ), array( '%d' )
 	);
+}
+
+function sa_event_social_mark_published( $id ) {
+	global $wpdb;
+	return $wpdb->update( sa_event_table_social(),
+		array( 'status' => 'posted' ),
+		array( 'id' => (int) $id ),
+		array( '%s' ), array( '%d' )
+	);
+}
+
+/**
+ * Un canal est "configure" si ses identifiants existent. Determine si le
+ * bouton "Publier maintenant" doit apparaitre pour ce canal - tant que
+ * Hicham n'a pas ajoute les identifiants dans WORDPRESS_CONFIG_EXTRA, aucun
+ * bouton n'apparait et rien ne peut partir automatiquement.
+ */
+function sa_event_social_channel_configured( $channel ) {
+	if ( 'facebook' === $channel ) {
+		return defined( 'FACEBOOK_PAGE_ID' ) && FACEBOOK_PAGE_ID !== '' && defined( 'FACEBOOK_PAGE_ACCESS_TOKEN' ) && FACEBOOK_PAGE_ACCESS_TOKEN !== '';
+	}
+	if ( 'x' === $channel ) {
+		return defined( 'X_BEARER_TOKEN' ) && X_BEARER_TOKEN !== '';
+	}
+	return false; // telegram et newsletter restent volontairement manuels pour l'instant.
+}
+
+/**
+ * Publie reellement sur Facebook (Graph API - /{page-id}/feed) ou X (API v2 -
+ * /2/tweets, contexte utilisateur via Bearer token OAuth2). NON TESTE contre
+ * de vrais identifiants au moment de l'ecriture (aucun n'existe encore sur ce
+ * projet) - suit la documentation officielle de chaque API, mais Hicham doit
+ * verifier avec un premier post a faible enjeu avant de compter dessus.
+ * Retourne true en cas de succes, ou une chaine d'erreur explicite sinon.
+ */
+function sa_event_social_publish_to_channel( $channel, $content, $article_url = '' ) {
+	if ( ! sa_event_social_channel_configured( $channel ) ) {
+		return "Canal '{$channel}' non configure (identifiants manquants).";
+	}
+
+	if ( 'facebook' === $channel ) {
+		$body = array(
+			'message'      => $content,
+			'access_token' => FACEBOOK_PAGE_ACCESS_TOKEN,
+		);
+		if ( $article_url ) {
+			$body['link'] = $article_url;
+		}
+		$response = wp_remote_post( 'https://graph.facebook.com/v19.0/' . rawurlencode( FACEBOOK_PAGE_ID ) . '/feed', array(
+			'timeout' => 15,
+			'body'    => $body,
+		) );
+		if ( is_wp_error( $response ) ) {
+			return 'Erreur reseau Facebook : ' . $response->get_error_message();
+		}
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			return 'Erreur API Facebook (HTTP ' . $code . ') : ' . wp_remote_retrieve_body( $response );
+		}
+		return true;
+	}
+
+	if ( 'x' === $channel ) {
+		$response = wp_remote_post( 'https://api.twitter.com/2/tweets', array(
+			'timeout' => 15,
+			'headers' => array(
+				'Authorization' => 'Bearer ' . X_BEARER_TOKEN,
+				'Content-Type'  => 'application/json',
+			),
+			'body'    => wp_json_encode( array( 'text' => $content ) ),
+		) );
+		if ( is_wp_error( $response ) ) {
+			return 'Erreur reseau X : ' . $response->get_error_message();
+		}
+		$code = wp_remote_retrieve_response_code( $response );
+		if ( $code < 200 || $code >= 300 ) {
+			return 'Erreur API X (HTTP ' . $code . ') : ' . wp_remote_retrieve_body( $response );
+		}
+		return true;
+	}
+
+	return "Canal '{$channel}' non pris en charge pour la publication automatique.";
 }
 
 /**
@@ -427,6 +519,38 @@ function sa_event_merge( $source_key, $target_key, $actor ) {
  * n'est JAMAIS publie automatiquement : le redacteur en chef doit le valider
  * et le publier lui-meme (via /wp-admin ou la commande /publish du bot).
  */
+/**
+ * Maillage interne simple pour le SEO : cherche des articles deja publies
+ * dont le titre partage des mots significatifs avec $title (memes tokens
+ * que la deduplication d'evenements). Retourne au plus $limit posts.
+ */
+function sa_event_related_published_posts( $title, $limit = 3 ) {
+	$tokens = sa_event_tokenize( $title );
+	if ( empty( $tokens ) ) {
+		return array();
+	}
+	// WP_Query 's' fait une recherche OR-ish sur le texte ; on lui donne les
+	// tokens les plus significatifs (les plus longs, souvent les plus rares).
+	usort( $tokens, function ( $a, $b ) {
+		return mb_strlen( $b, 'UTF-8' ) <=> mb_strlen( $a, 'UTF-8' );
+	} );
+	$search = implode( ' ', array_slice( $tokens, 0, 6 ) );
+
+	$query = new WP_Query( array(
+		's'              => $search,
+		'post_type'      => 'post',
+		'post_status'    => 'publish',
+		'posts_per_page' => $limit,
+		'orderby'        => 'relevance',
+	) );
+
+	$related = array();
+	foreach ( $query->posts as $p ) {
+		$related[] = array( 'title' => get_the_title( $p ), 'url' => get_permalink( $p ) );
+	}
+	return $related;
+}
+
 function sa_event_promote_to_article( $event_key, $actor ) {
 	$event = sa_event_get_by_key( $event_key );
 	if ( ! $event ) {
@@ -450,6 +574,19 @@ function sa_event_promote_to_article( $event_key, $actor ) {
 			} else {
 				$body .= '<li>' . esc_html( $label ) . '</li>' . "\n";
 			}
+		}
+		$body .= "</ul>\n";
+	}
+
+	// Maillage interne (SEO) : suggere des articles deja publies sur des
+	// sujets proches, pour que le redacteur en chef les garde ou les retire
+	// avant publication - jamais insere sans relecture puisque le brouillon
+	// reste un brouillon.
+	$related = sa_event_related_published_posts( $event->title, 3 );
+	if ( $related ) {
+		$body .= "<h2>À lire aussi</h2>\n<ul>\n";
+		foreach ( $related as $r ) {
+			$body .= '<li><a href="' . esc_url( $r['url'] ) . '">' . esc_html( $r['title'] ) . '</a></li>' . "\n";
 		}
 		$body .= "</ul>\n";
 	}
@@ -974,6 +1111,22 @@ function sa_event_admin_handle_post() {
 		sa_event_merge( $similar_key, $event_key, $actor );
 	} elseif ( 'mark_social_posted' === $action && isset( $_POST['sa_social_id'] ) ) {
 		sa_event_social_mark_posted( (int) $_POST['sa_social_id'] );
+	} elseif ( 'publish_social' === $action && isset( $_POST['sa_social_id'] ) ) {
+		$sp = sa_event_social_get( (int) $_POST['sa_social_id'] );
+		if ( $sp ) {
+			$article_url = '';
+			$event_row   = sa_event_get_by_key( $event_key );
+			if ( $event_row && $event_row->article_post_id ) {
+				$article_url = get_permalink( (int) $event_row->article_post_id );
+			}
+			$result = sa_event_social_publish_to_channel( $sp->channel, $sp->content, $article_url );
+			if ( true === $result ) {
+				sa_event_social_mark_published( $sp->id );
+				sa_event_log( $sp->event_id, $actor, 'social_published', array( 'channel' => $sp->channel ) );
+			} else {
+				set_transient( 'sa_event_social_error_' . get_current_user_id(), (string) $result, 60 );
+			}
+		}
 	}
 
 	wp_safe_redirect( add_query_arg( array( 'page' => 'sa-events', 'event' => $event_key ), admin_url( 'options-general.php' ) ) );
@@ -1058,18 +1211,37 @@ function sa_event_admin_page() {
 				<?php endif; ?>
 
 				<h3>Publications sociales preparees</h3>
-				<p><small>Preparation seulement : aucun envoi automatique. A copier-coller manuellement sur le reseau concerne.</small></p>
+				<p><small>Preparation par defaut : rien ne part automatiquement. "Publier maintenant" n'apparait que pour les canaux dont les identifiants sont configures (Facebook/X) ; sinon, copier-coller manuel.</small></p>
+				<?php
+				$social_error = get_transient( 'sa_event_social_error_' . get_current_user_id() );
+				if ( $social_error ) {
+					delete_transient( 'sa_event_social_error_' . get_current_user_id() );
+					echo '<div class="notice notice-error"><p>' . esc_html( $social_error ) . '</p></div>';
+				}
+				?>
 				<?php $social_posts = sa_event_social_list( $focused_event->id ); ?>
 				<?php if ( ! $social_posts ) : ?>
 					<p>Aucune publication preparee pour le moment.</p>
 				<?php else : ?>
 					<ul>
 						<?php foreach ( $social_posts as $sp ) : ?>
+							<?php
+							$status_label = 'draft' === $sp->status ? 'brouillon' : ( 'posted' === $sp->status ? 'publie (auto)' : 'publie (manuel)' );
+							?>
 							<li style="margin-bottom:8px;">
 								<?php echo sa_event_badge( $sp->channel ); ?>
-								<?php echo sa_event_badge( 'posted_manually' === $sp->status ? 'publie (manuel)' : 'brouillon' ); ?>
+								<?php echo sa_event_badge( $status_label ); ?>
 								<br /><?php echo nl2br( esc_html( $sp->content ) ); ?>
 								<?php if ( 'draft' === $sp->status ) : ?>
+									<?php if ( sa_event_social_channel_configured( $sp->channel ) ) : ?>
+										<form method="post" style="display:inline;">
+											<?php wp_nonce_field( 'sa_event_admin', 'sa_event_nonce' ); ?>
+											<input type="hidden" name="sa_event_action" value="publish_social" />
+											<input type="hidden" name="sa_event_key" value="<?php echo esc_attr( $focused_event->event_key ); ?>" />
+											<input type="hidden" name="sa_social_id" value="<?php echo esc_attr( $sp->id ); ?>" />
+											<?php submit_button( 'Publier maintenant', 'primary', 'submit', false ); ?>
+										</form>
+									<?php endif; ?>
 									<form method="post" style="display:inline;">
 										<?php wp_nonce_field( 'sa_event_admin', 'sa_event_nonce' ); ?>
 										<input type="hidden" name="sa_event_action" value="mark_social_posted" />
