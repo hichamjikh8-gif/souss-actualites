@@ -64,7 +64,8 @@ add_action( 'wp_head', function () {
 	margin: 0;
 	padding: 0;
 }
-.sa-breaking-news-track a {
+.sa-breaking-news-track a,
+.sa-breaking-news-track span {
 	color: #ffffff;
 	text-decoration: none;
 	font-size: 15px;
@@ -96,26 +97,20 @@ add_action( 'wp_body_open', function () {
 		return;
 	}
 
-	$latest = get_posts( array(
-		'numberposts'      => 8,
-		'post_status'      => 'publish',
-		'orderby'          => 'date',
-		'order'            => 'DESC',
-		'suppress_filters' => false,
-	) );
-
-	if ( empty( $latest ) ) {
-		return;
-	}
-
 	$items = '';
-	foreach ( $latest as $post ) {
-		$url    = get_permalink( $post );
-		$title  = get_the_title( $post );
-		if ( '' === $title || '' === $url || false === $url ) {
+	$flashes = function_exists( 'sa_flash_fetch' ) ? sa_flash_fetch( 8 ) : array();
+
+	foreach ( $flashes as $flash ) {
+		$title = trim( (string) $flash->title );
+		$url   = trim( (string) $flash->url );
+		if ( '' === $title ) {
 			continue;
 		}
-		$items .= '<li class="sa-breaking-news-item"><a href="' . esc_url( $url ) . '">' . esc_html( $title ) . '</a></li>';
+		if ( '' !== $url ) {
+			$items .= '<li class="sa-breaking-news-item"><a href="' . esc_url( $url ) . '">' . esc_html( $title ) . '</a></li>';
+		} else {
+			$items .= '<li class="sa-breaking-news-item"><span>' . esc_html( $title ) . '</span></li>';
+		}
 	}
 
 	if ( '' === $items ) {

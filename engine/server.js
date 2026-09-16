@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const { makeTelegramClient } = require('./lib/telegram');
 const { makeWpBotApi } = require('./lib/wpBotApi');
+const { makeFlashApi } = require('./lib/wpBotApi');
+const { makeEventsApi } = require('./lib/eventsApi');
 const { makeAgent } = require('./lib/agent');
 
 const PORT = process.env.PORT || 3000;
@@ -24,9 +26,11 @@ app.use(express.json());
 
 const telegram = TELEGRAM_BOT_TOKEN ? makeTelegramClient(TELEGRAM_BOT_TOKEN) : null;
 const wpApi = BOT_API_SECRET ? makeWpBotApi(WP_BASE_URL, BOT_API_SECRET) : null;
+const flashApi = BOT_API_SECRET ? makeFlashApi(WP_BASE_URL, BOT_API_SECRET) : null;
+const eventsApi = BOT_API_SECRET ? makeEventsApi(WP_BASE_URL, BOT_API_SECRET) : null;
 const agent =
-    ANTHROPIC_API_KEY && telegram && wpApi
-        ? makeAgent({ anthropicApiKey: ANTHROPIC_API_KEY, telegram, wpApi, falKey: FAL_KEY })
+    ANTHROPIC_API_KEY && telegram && flashApi
+        ? makeAgent({ anthropicApiKey: ANTHROPIC_API_KEY, telegram, wpApi, flashApi, eventsApi, falKey: FAL_KEY })
         : null;
 
 function loadSeenComments() {
