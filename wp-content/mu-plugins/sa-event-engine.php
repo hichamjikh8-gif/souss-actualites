@@ -1633,8 +1633,8 @@ add_action( 'transition_post_status', function ( $new_status, $old_status, $post
 	if ( ! $post || 'post' !== $post->post_type ) {
 		return;
 	}
-	if ( ! has_category( 'actualites', $post ) ) {
-		return; // perimetre demande : uniquement la categorie Actualites
+	if ( ! sa_une_is_comment_free_category( $post->ID ) ) {
+		return; // perimetre : Actualites + International (etendu le 2026-09-17)
 	}
 	sa_une_generate_summary( $post->ID );
 }, 10, 3 );
@@ -1649,6 +1649,13 @@ add_action( 'transition_post_status', function ( $new_status, $old_status, $post
  * sur une autre categorie (ex: "L'Actu du jour") : les deux peuvent coexister
  * sans conflit, chacune ne fait rien si l'autre a deja retire le bloc.
  * --------------------------------------------------------------------------- */
+// Categories concernees par le retrait du formulaire de commentaires - au
+// depart uniquement "actualites", etendu a "international" le 2026-09-17
+// (les depeches internationales n'etaient pas couvertes).
+function sa_une_is_comment_free_category( $post_id ) {
+	return has_category( 'actualites', $post_id ) || has_category( 'international', $post_id );
+}
+
 add_filter( 'comments_open', 'sa_une_close_comments_on_actualites', 10, 2 );
 add_filter( 'pings_open', 'sa_une_close_comments_on_actualites', 10, 2 );
 
@@ -1657,7 +1664,7 @@ function sa_une_close_comments_on_actualites( $open, $post_id ) {
 		global $post;
 		$post_id = $post ? $post->ID : 0;
 	}
-	if ( $post_id && has_category( 'actualites', (int) $post_id ) ) {
+	if ( $post_id && sa_une_is_comment_free_category( (int) $post_id ) ) {
 		return false;
 	}
 	return $open;
@@ -1673,7 +1680,7 @@ function sa_une_replace_comments_block( $block_content, $block ) {
 		return $block_content;
 	}
 	$post_id = get_the_ID();
-	if ( ! $post_id || ! has_category( 'actualites', (int) $post_id ) ) {
+	if ( ! $post_id || ! sa_une_is_comment_free_category( (int) $post_id ) ) {
 		return $block_content;
 	}
 	$the_post = get_post( $post_id );
