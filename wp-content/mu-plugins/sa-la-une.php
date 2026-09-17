@@ -3,12 +3,12 @@
  * Plugin Name: Souss Actualites – La Une
  * Description: (1) Tout article publie dans Actualites apparait automatiquement
  *              dans "L'Actu du jour" (La Une) sans action manuelle.
- *              (2) Supprime le formulaire "Laisser un commentaire" sur les articles
- *              de L'Actu du jour.
+ *              (2) Supprime la section commentaires sur les articles de L'Actu du jour
+ *              et affiche le resume IA a la place.
  *              (3) Sur la page de la categorie L'Actu du jour : affiche l'extrait
  *              integral (resume IA de 5 lignes) et ajoute un lien
  *              "Lire l'article complet".
- * Version:     1.0.1
+ * Version:     1.1.0
  * Author:      Souss Actualites
  */
 
@@ -47,11 +47,7 @@ function sa_la_une_auto_sync( $new_status, $old_status, $post ) {
 }
 
 /* ---------------------------------------------------------------------------
- * 2. COMMENTAIRES : Fermeture sur les articles de L'Actu du jour
- *
- * Le formulaire "Laisser un commentaire" disparait sur les pages individuelles
- * d'articles appartenant a la categorie lactu-du-jour, sans toucher aux reglages
- * globaux de commentaires du site.
+ * 2. COMMENTAIRES – Niveau 1 : fermeture via filtre WordPress natif (belt)
  *
  * Correctif v1.0.1 : les themes FSE appellent souvent comments_open() sans
  * argument — $post_id vaut alors 0. On revient au post global dans ce cas.
@@ -60,8 +56,6 @@ add_filter( 'comments_open', 'sa_la_une_close_comments', 10, 2 );
 add_filter( 'pings_open',    'sa_la_une_close_comments', 10, 2 );
 
 function sa_la_une_close_comments( $open, $post_id ) {
-    // Les themes FSE appellent souvent comments_open() sans argument :
-    // $post_id vaut alors 0. On revient au post global dans ce cas.
     if ( ! $post_id ) {
         global $post;
         $post_id = $post ? $post->ID : 0;
@@ -70,6 +64,42 @@ function sa_la_une_close_comments( $open, $post_id ) {
         return false;
     }
     return $open;
+}
+
+/* ---------------------------------------------------------------------------
+ * 2b. COMMENTAIRES – Niveau 2 : remplacement du bloc FSE par le resume IA
+ *
+ * Les themes block (FSE) utilisent le bloc core/comments pour afficher le
+ * formulaire. On intercepte son rendu et on le remplace par le resume IA
+ * stocke dans post_excerpt. Double protection avec le filtre ci-dessus.
+ * --------------------------------------------------------------------------- */
+add_filter( 'render_block', 'sa_la_une_replace_comments_block', 10, 2 );
+
+function sa_la_une_replace_comments_block( $block_content, $block ) {
+    // On ne touche qu'au bloc core/comments sur les articles individuels.
+    if ( 'core/comments' !== $block['blockName'] ) {
+        return $block_content;
+    }
+    if ( ! is_singular( 'post' ) ) {
+        return $block_content;
+    }
+    global $post;
+    $post_id = $post ? $post->ID : get_the_ID();
+    if ( ! $post_id || ! has_category( 'lactu-du-jour', (int) $post_id ) ) {
+        return $block_content;
+    }
+    $the_post = get_post( $post_id );
+    if ( ! $the_post ) {
+        return '';
+    }
+    $raw = trim( $the_post->post_excerpt );
+    // Pas de resume stocke : on supprime simplement le bloc.
+    if ( '' === $raw ) {
+        return '';
+    }
+    return '<div class="sa-resume-article">'
+        . wpautop( esc_html( $raw ) )
+        . '</div>';
 }
 
 /* ---------------------------------------------------------------------------
@@ -98,7 +128,7 @@ function sa_la_une_excerpt_with_link( $excerpt ) {
     $excerpt .= sprintf(
         '<p class="sa-lire-plus"><a href="%s">%s</a></p>',
         esc_url( get_permalink( $post->ID ) ),
-        esc_html__( "Lire l’article complet", 'souss-actualites' )
+        esc_html__( "Lire l\u2019article complet", 'souss-actualites' )
     );
     return $excerpt;
 }
