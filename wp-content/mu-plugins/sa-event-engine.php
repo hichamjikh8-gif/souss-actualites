@@ -1516,3 +1516,125 @@ function sa_event_admin_page() {
 	</div>
 	<?php
 }
+
+/* --------------------- RESUME AUTOMATIQUE "A LA UNE" -----------------------
+ * Quand un article est publie dans la categorie Actualites (que ce soit via
+ * la syndication automatique ou une publication manuelle depuis /wp-admin),
+ * genere un resume fidele d'environ 5 lignes avec l'API Claude et le stocke
+ * comme extrait WordPress standard (post_excerpt) - les blocs "Extrait de
+ * l'article" (core/post-excerpt) deja utilises sur le site l'affichent alors
+ * automatiquement, sans modification du theme. Desactive tant que
+ * ANTHROPIC_API_KEY n'est pas disponible (constante WORDPRESS_CONFIG_EXTRA ou
+ * variable d'environnement, meme mecanisme que PEXELS_API_KEY).
+ * ---------------------------------------------------------------------------
+ */
+
+/**
+ * Accepte une cle/secret soit comme constante PHP (define()), soit comme
+ * variable d'environnement du conteneur (getenv()). Generalisation de
+ * sa_event_stock_photo_key() pour d'autres cles (ANTHROPIC_API_KEY...) sans
+ * toucher a cette fonction deja verifiee en production.
+ */
+function sa_event_secret( $name ) {
+	if ( defined( $name ) && '' !== constant( $name ) ) {
+		return constant( $name );
+	}
+	$env = getenv( $name );
+	return ( false !== $env && '' !== $env ) ? $env : null;
+}
+
+function sa_une_generate_summary( $post_id ) {
+	$api_key = sa_event_secret( 'ANTHROPIC_API_KEY' );
+	if ( ! $api_key ) {
+		return;
+	}
+	if ( get_post_meta( $post_id, '_sa_une_summary_done', true ) ) {
+		return; // deja fait - evite de regenerer a chaque modification mineure
+	}
+
+	$post = get_post( $post_id );
+	if ( ! $post ) {
+		return;
+	}
+
+	$title   = wp_strip_all_tags( $post->post_title );
+	$content = wp_strip_all_tags( $post->post_content );
+	// Coupe le bloc d'attribution de syndication (📰 Source: ... / المصدر :
+	// ...) pour que le resume parle du SUJET de l'article, pas du lien source.
+	$content = preg_replace( '/📰.*$/us', '', $content );
+	$content = trim( mb_substr( $content, 0, 4000, 'UTF-8' ) );
+
+	if ( '' === $content ) {
+		return;
+	}
+
+	$model = sa_event_secret( 'CLAUDE_MODEL' ) ?: 'claude-sonnet-5';
+	$prompt = "Voici un article de presse. Redige un resume fidele d'environ 5 lignes (pas plus), dans LA MEME LANGUE que l'article, sans inventer d'information, qui donne immediatement l'essentiel au lecteur. Reponds uniquement avec le texte du resume, sans titre ni guillemets.\n\nTitre : {$title}\n\nArticle :\n{$content}";
+
+	$response = wp_remote_post( 'https://api.anthropic.com/v1/messages', array(
+		'timeout' => 30,
+		'headers' => array(
+			'x-api-key'         => $api_key,
+			'anthropic-version' => '2023-06-01',
+			'content-type'      => 'application/json',
+		),
+		'body' => wp_json_encode( array(
+			'model'      => $model,
+			'max_tokens' => 400,
+			'messages'   => array(
+				array( 'role' => 'user', 'content' => $prompt ),
+			),
+		) ),
+	) );
+
+	if ( is_wp_error( $response ) ) {
+		error_log( '[sa-une-summary] echec appel Claude (post #' . $post_id . ') : ' . $response->get_error_message() );
+		return;
+	}
+	$code = wp_remote_retrieve_response_code( $response );
+	if ( $code < 200 || $code >= 300 ) {
+		error_log( '[sa-une-summary] erreur API Claude (post #' . $post_id . ', HTTP ' . $code . ') : ' . wp_remote_retrieve_body( $response ) );
+		return;
+	}
+
+	$data    = json_decode( wp_remote_retrieve_body( $response ), true );
+	$summary = '';
+	if ( ! empty( $data['content'] ) && is_array( $data['content'] ) ) {
+		foreach ( $data['content'] as $block ) {
+			if ( isset( $block['type'] ) && 'text' === $block['type'] && isset( $block['text'] ) ) {
+				$summary .= $block['text'];
+			}
+		}
+	}
+	$summary = trim( $summary );
+
+	if ( '' === $summary ) {
+		error_log( '[sa-une-summary] reponse Claude vide (post #' . $post_id . ')' );
+		return;
+	}
+
+	// wp_update_post() re-declenche transition_post_status, mais avec
+	// old_status == new_status == 'publish' cette fois : le garde-fou dans le
+	// hook (voir plus bas) empeche toute boucle.
+	wp_update_post( array(
+		'ID'           => $post_id,
+		'post_excerpt' => $summary,
+	) );
+	update_post_meta( $post_id, '_sa_une_summary_done', 1 );
+	update_post_meta( $post_id, '_sa_une_summary_generated_at', current_time( 'mysql' ) );
+
+	error_log( '[sa-une-summary] resume genere (post #' . $post_id . ', ' . mb_strlen( $summary, 'UTF-8' ) . ' caracteres)' );
+}
+
+add_action( 'transition_post_status', function ( $new_status, $old_status, $post ) {
+	if ( 'publish' !== $new_status || 'publish' === $old_status ) {
+		return; // uniquement au moment reel de la publication, jamais en boucle
+	}
+	if ( ! $post || 'post' !== $post->post_type ) {
+		return;
+	}
+	if ( ! has_category( 'actualites', $post ) ) {
+		return; // perimetre demande : uniquement la categorie Actualites
+	}
+	sa_une_generate_summary( $post->ID );
+}, 10, 3 );

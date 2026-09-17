@@ -81,13 +81,24 @@ async function fetchOgImage(articleUrl) {
 
 /**
  * Construit le contenu HTML Gutenberg : resume + separateur + attribution.
+ * L'attribution respecte la langue reelle de l'article (bug corrige le
+ * 2026-09-17 : le texte etait fige en arabe meme pour les sources
+ * francophones comme Foot Mercato ou La Nouvelle Tribune).
  */
-function buildPostContent(excerpt, sourceName, sourceUrl) {
+function buildPostContent(excerpt, title, sourceName, sourceUrl) {
     const safeExcerpt = (excerpt || '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    const attribution = `📰 <strong>المصدر :</strong> <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceName}</a>`;
-    const readMore = `<a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">← اقرأ المقال كاملاً على موقع ${sourceName}</a>`;
+    // Plage Unicode arabe U+0600-U+06FF ; sinon on suppose francais (les deux
+    // seules langues editoriales du site, voir docs/newsroom/editorial-charter.md).
+    const isArabic = /[؀-ۿ]/.test(`${title} ${excerpt}`);
+
+    const attribution = isArabic
+        ? `📰 <strong>المصدر :</strong> <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceName}</a>`
+        : `📰 <strong>Source :</strong> <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceName}</a>`;
+    const readMore = isArabic
+        ? `<a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">← اقرأ المقال كاملاً على موقع ${sourceName}</a>`
+        : `<a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">← Lire l'article complet sur ${sourceName}</a>`;
 
     return [
         '<!-- wp:paragraph -->',
@@ -146,7 +157,7 @@ async function publishSyndicatedArticle(source, item, eventKey, wpBaseUrl, botSe
         imageUrl = await fetchOgImage(sourceUrl);
     } catch (_) {}
 
-    const content = buildPostContent(excerpt, sourceName, sourceUrl);
+    const content = buildPostContent(excerpt, title, sourceName, sourceUrl);
 
     const payload = {
         title,

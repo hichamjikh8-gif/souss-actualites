@@ -81,6 +81,34 @@ async function notifyAdmin(text) {
     }
 }
 
+// Mots-cles Maroc / sport marocain (arabe + francais + variantes latines des
+// noms de joueurs les plus couverts). Utilise pour n'autoriser la syndication
+// automatique d'un article "sport" ou "international" que s'il concerne
+// reellement le Maroc - la charte editoriale (voir docs/newsroom) l'exige
+// explicitement : "le sport uniquement lorsqu'il concerne des sportifs
+// marocains... les grandes depeches sportives mondiales uniquement lorsqu'il
+// s'agit d'une veritable information majeure" (ce dernier cas reste un choix
+// humain : on ne le laisse pas passer automatiquement, voir plus bas).
+const MOROCCO_KEYWORDS = [
+    // pays / lieux
+    'maroc', 'marocain', 'marocaine', 'morocco', 'moroccan', 'المغرب', 'مغربي', 'مغربية',
+    'souss', 'agadir', 'massa', 'rabat', 'casablanca', 'marrakech', 'fes', 'fès', 'tanger', 'oujda',
+    // equipe nationale / clubs
+    'lions de l’atlas', 'lions de l\'atlas', 'أسود الأطلس', 'الأسود',
+    'wydad', 'الوداد', 'raja', 'الرجاء', 'botola', 'البطولة', 'far rabat', 'الجيش الملكي',
+    'rsb', 'ittihad tanger', 'الاتحاد', 'mas fes', 'المغرب الفاسي',
+    // joueurs marocains les plus couverts a l'etranger (variantes latines + arabes)
+    'hakimi', 'حكيمي', 'ziyech', 'زياش', 'en-nesyri', 'ennesyri', 'النصيري', 'ounahi', 'أوناحي',
+    'mazraoui', 'مزراوي', 'saiss', 'الصايس', 'amrabat', 'أمرابط', 'boufal', 'بوفال', 'aguerd', 'أكرض',
+    'diaz', // Brahim Diaz (international marocain depuis 2023)
+    'regragui', 'الركراكي',
+];
+
+function isMoroccoRelevant(title, excerpt) {
+    const text = `${title} ${excerpt}`.toLowerCase();
+    return MOROCCO_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()));
+}
+
 /**
  * Traite un article. Retourne true si l'article a ete gere (evenement cree,
  * ou URL deja connue) et false en cas d'echec transitoire.
@@ -134,8 +162,16 @@ async function processItem(source, item) {
 
     // ── Syndication automatique ──────────────────────────────────────────────
     // Si la source est marquee publish_to_sa et que cet article n'a pas encore
-    // ete publie sur Souss Actualites, on le publie maintenant.
-    if (source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey)) {
+    // ete publie sur Souss Actualites, on le publie maintenant - SAUF pour les
+    // categories sport/international si l'article ne concerne pas directement
+    // le Maroc (charte editoriale). Dans ce cas l'evenement reste cree
+    // (to_watch) mais n'est pas publie tout seul : Hicham ou l'agent decide.
+    const needsMoroccoCheck = source.category === 'sport' || source.category === 'international';
+    const moroccoOk = !needsMoroccoCheck || isMoroccoRelevant(title, excerpt);
+    if (!moroccoOk) {
+        console.log(`[${source.name}] Syndication ignoree (hors perimetre Maroc) : ${title}`);
+    }
+    if (moroccoOk && source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey)) {
         try {
             const result = await publishSyndicatedArticle(source, item, eventKey, WP_BASE_URL, BOT_API_SECRET);
             if (result) {
