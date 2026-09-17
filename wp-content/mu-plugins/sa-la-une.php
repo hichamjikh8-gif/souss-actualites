@@ -8,7 +8,7 @@
  *              (3) Sur la page de la categorie L'Actu du jour : affiche l'extrait
  *              integral (resume IA de 5 lignes) et ajoute un lien
  *              "Lire l'article complet".
- * Version:     1.0.0
+ * Version:     1.0.1
  * Author:      Souss Actualites
  */
 
@@ -52,11 +52,20 @@ function sa_la_une_auto_sync( $new_status, $old_status, $post ) {
  * Le formulaire "Laisser un commentaire" disparait sur les pages individuelles
  * d'articles appartenant a la categorie lactu-du-jour, sans toucher aux reglages
  * globaux de commentaires du site.
+ *
+ * Correctif v1.0.1 : les themes FSE appellent souvent comments_open() sans
+ * argument — $post_id vaut alors 0. On revient au post global dans ce cas.
  * --------------------------------------------------------------------------- */
 add_filter( 'comments_open', 'sa_la_une_close_comments', 10, 2 );
 add_filter( 'pings_open',    'sa_la_une_close_comments', 10, 2 );
 
 function sa_la_une_close_comments( $open, $post_id ) {
+    // Les themes FSE appellent souvent comments_open() sans argument :
+    // $post_id vaut alors 0. On revient au post global dans ce cas.
+    if ( ! $post_id ) {
+        global $post;
+        $post_id = $post ? $post->ID : 0;
+    }
     if ( $post_id && has_category( 'lactu-du-jour', (int) $post_id ) ) {
         return false;
     }
