@@ -40,36 +40,36 @@
     "url": "https://marocfoot.net/feed/",
     "category": "sport",
     "enabled": true,
-    "publish_to_sa": true,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Football marocain : equipe nationale, Botola Pro, joueurs marocains en Europe. Domaine migre de marocfoot.com vers marocfoot.net — mis a jour le 2026-09-17."
+    "note": "Football marocain : equipe nationale, Botola Pro, joueurs marocains en Europe. Domaine migre de marocfoot.com vers marocfoot.net — mis a jour le 2026-09-17. Publication auto desactivee le 2026-09-17 : sport passe en mode brouillon, validation redacteur requise."
   },
   {
     "name": "Foot Mercato",
     "url": "https://www.footmercato.net/flux-rss",
     "category": "sport",
     "enabled": true,
-    "publish_to_sa": true,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Actualite mercato et football europeen en francais. Couvre en detail les joueurs marocains (Hakimi, Ziyech, En-Nesyri, Ounahi, Mazraoui, Saiss...). URL corrigee le 2026-09-17 : /flux-rss au lieu de /feed."
+    "note": "Actualite mercato et football europeen en francais. Couvre en detail les joueurs marocains (Hakimi, Ziyech, En-Nesyri, Ounahi, Mazraoui, Saiss...). URL corrigee le 2026-09-17 : /flux-rss au lieu de /feed. Publication auto desactivee le 2026-09-17."
   },
   {
     "name": "AlMaghrebSport",
     "url": "https://almaghrebsport.com/feed/",
     "category": "sport",
     "enabled": true,
-    "publish_to_sa": true,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Journal sportif marocain en arabe : Botola Pro, Lions de l'Atlas, Wydad, Raja, joueurs marocains a l'etranger. Ajoute le 2026-09-17 en remplacement des sources arabes non disponibles."
+    "note": "Journal sportif marocain en arabe : Botola Pro, Lions de l'Atlas, Wydad, Raja, joueurs marocains a l'etranger. Ajoute le 2026-09-17 en remplacement des sources arabes non disponibles. Publication auto desactivee le 2026-09-17."
   },
   {
     "name": "Hespress Sport",
     "url": "https://hespress.com/category/sport/feed",
     "category": "sport",
     "enabled": true,
-    "publish_to_sa": true,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Rubrique sport de Hespress : actualite sportive marocaine et internationale en arabe. Couvre Lions de l'Atlas, joueurs en Europe, Botola. Ajoute le 2026-09-17."
+    "note": "Rubrique sport de Hespress : actualite sportive marocaine et internationale en arabe. Couvre Lions de l'Atlas, joueurs en Europe, Botola. Ajoute le 2026-09-17. Publication auto desactivee le 2026-09-17."
   },
   {
     "name": "L'Equipe",
