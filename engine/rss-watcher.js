@@ -10,6 +10,8 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '@soussactualites_bot';
 const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const CHECK_INTERVAL_MS = parseInt(process.env.CHECK_INTERVAL_MS || '300000', 10); // 5 minutes
+const FACEBOOK_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
+const FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
 
 const SEEN_FILE = path.join(__dirname, 'seen.json');
 
@@ -69,40 +71,77 @@ async function alertAdmin(text) {
     }
 }
 
+// Publie l'article sur la Page Facebook via l'API Graph.
+// Ne fait rien si les variables FACEBOOK_PAGE_ID / FACEBOOK_PAGE_ACCESS_TOKEN sont absentes
+// (degradation gracieuse : le worker continue de fonctionner sans Facebook).
+// Facebook extrait automatiquement le titre, l'image og:image et la description
+// depuis l'URL — pas besoin de les envoyer manuellement.
+async function sendFacebookPost(item) {
+    if (!FACEBOOK_PAGE_ID || !FACEBOOK_PAGE_ACCESS_TOKEN) return null;
+
+    const url = `https://graph.facebook.com/v20.0/${FACEBOOK_PAGE_ID}/feed`;
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            message: item.title,
+            link: item.link,
+            access_token: FACEBOOK_PAGE_ACCESS_TOKEN,
+        }),
+    });
+
+    const data = await response.json();
+    if (data.error) {
+        throw new Error(`Erreur API Facebook: ${JSON.stringify(data.error)}`);
+    }
+    return data.id; // post_id retourne par Facebook
+}
+
 async function checkFeed() {
     if (!TELEGRAM_BOT_TOKEN) {
-          console.error('TELEGRAM_BOT_TOKEN manquant. Ajoutez cette variable d\'environnement dans Railway.');
-          return;
+        console.error('TELEGRAM_BOT_TOKEN manquant. Ajoutez cette variable d\'environnement dans Railway.');
+        return;
     }
 
-  const seen = loadSeen();
+    const seen = loadSeen();
 
-  try {
+    try {
         const feed = await parser.parseURL(FEED_URL);
         const newItems = feed.items.filter((item) => item.link && !seen.has(item.link)).reverse();
 
-      for (const item of newItems) {
-              try {
-                        await sendTelegramMessage(item);
-                        seen.add(item.link);
-                        console.log(`Article envoye: ${item.title}`);
-              } catch (sendErr) {
-                        console.error(`Echec envoi pour "${item.title}":`, sendErr.message);
-                        await alertAdmin(`⚠️ Échec d'envoi Telegram pour l'article "${item.title}" : ${sendErr.message}`);
-              }
-      }
+        for (const item of newItems) {
+            // Telegram
+            try {
+                await sendTelegramMessage(item);
+                console.log(`Telegram OK: ${item.title}`);
+            } catch (sendErr) {
+                console.error(`Echec Telegram pour "${item.title}":`, sendErr.message);
+                await alertAdmin(`⚠️ Échec Telegram pour "${item.title}" : ${sendErr.message}`);
+            }
 
-      if (newItems.length > 0) {
-              saveSeen(seen);
-      } else {
-              console.log('Aucun nouvel article a envoyer.');
-      }
-  } catch (err) {
+            // Facebook (independant de Telegram — un echec ne bloque pas l'autre)
+            try {
+                const fbId = await sendFacebookPost(item);
+                if (fbId) console.log(`Facebook OK: ${item.title} (post ${fbId})`);
+            } catch (fbErr) {
+                console.error(`Echec Facebook pour "${item.title}":`, fbErr.message);
+                await alertAdmin(`⚠️ Échec Facebook pour "${item.title}" : ${fbErr.message}`);
+            }
+
+            seen.add(item.link);
+        }
+
+        if (newItems.length > 0) {
+            saveSeen(seen);
+        } else {
+            console.log('Aucun nouvel article a envoyer.');
+        }
+    } catch (err) {
         console.error('Erreur lors de la lecture du flux RSS:', err.message);
-  }
+    }
 }
 
-console.log('Demarrage du worker Souss Actualites (moteur envoi automatique Telegram)');
+console.log('Demarrage du worker Souss Actualites (moteur envoi automatique Telegram + Facebook)');
 console.log(`Flux surveille: ${FEED_URL}`);
 console.log(`Frequence: toutes les ${CHECK_INTERVAL_MS / 1000} secondes`);
 
