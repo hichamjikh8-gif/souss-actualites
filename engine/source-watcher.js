@@ -109,6 +109,23 @@ function isMoroccoRelevant(title, excerpt) {
     return MOROCCO_KEYWORDS.some((kw) => text.includes(kw.toLowerCase()));
 }
 
+// Detecte un article reserve aux abonnes de la source (paywall) : le titre
+// porte souvent un cadenas 🔒, et le corps scrape n'est alors que le message
+// d'abonnement, pas un vrai contenu - inutile et trompeur a republier tel
+// quel. Trouve en prod le 2026-09-17 (Aujourd'hui le Maroc, "Journal
+// electronique du Vendredi..." avec 🔒 dans le titre).
+const PAYWALL_PATTERNS = [
+    /🔒/,
+    /r[ée]serv[ée]e?\s+(à|a|aux)\s+(nos\s+)?abonn[ée]s/i,
+    /d[ée]couvrir\s+nos\s+offres\s+d.abonnement/i,
+    /d[ée]j[àa]\s+abonn[ée]/i,
+];
+
+function isPaywalled(title, excerpt) {
+    const text = `${title} ${excerpt}`;
+    return PAYWALL_PATTERNS.some((re) => re.test(text));
+}
+
 /**
  * Traite un article. Retourne true si l'article a ete gere (evenement cree,
  * ou URL deja connue) et false en cas d'echec transitoire.
@@ -171,7 +188,11 @@ async function processItem(source, item) {
     if (!moroccoOk) {
         console.log(`[${source.name}] Syndication ignoree (hors perimetre Maroc) : ${title}`);
     }
-    if (moroccoOk && source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey)) {
+    const paywalled = isPaywalled(title, excerpt);
+    if (paywalled) {
+        console.log(`[${source.name}] Syndication ignoree (contenu reserve aux abonnes) : ${title}`);
+    }
+    if (moroccoOk && !paywalled && source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey)) {
         try {
             const result = await publishSyndicatedArticle(source, item, eventKey, WP_BASE_URL, BOT_API_SECRET);
             if (result) {
