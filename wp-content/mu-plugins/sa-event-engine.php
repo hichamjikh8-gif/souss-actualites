@@ -1638,3 +1638,51 @@ add_action( 'transition_post_status', function ( $new_status, $old_status, $post
 	}
 	sa_une_generate_summary( $post->ID );
 }, 10, 3 );
+
+/* --------------------- COMMENTAIRES -> RESUME (Actualites) -----------------
+ * Sur demande du redacteur en chef : plus de formulaire "Laisser un
+ * commentaire" sur les articles de la categorie Actualites - le resume IA
+ * (post_excerpt, deja genere ci-dessus) s'affiche a la place. Scope sur la
+ * categorie "actualites" directement (deja verifiee fiable dans le hook
+ * ci-dessus) plutot que sur une synchronisation vers une categorie
+ * secondaire - independant de toute autre implementation eventuelle basee
+ * sur une autre categorie (ex: "L'Actu du jour") : les deux peuvent coexister
+ * sans conflit, chacune ne fait rien si l'autre a deja retire le bloc.
+ * --------------------------------------------------------------------------- */
+add_filter( 'comments_open', 'sa_une_close_comments_on_actualites', 10, 2 );
+add_filter( 'pings_open', 'sa_une_close_comments_on_actualites', 10, 2 );
+
+function sa_une_close_comments_on_actualites( $open, $post_id ) {
+	if ( ! $post_id ) {
+		global $post;
+		$post_id = $post ? $post->ID : 0;
+	}
+	if ( $post_id && has_category( 'actualites', (int) $post_id ) ) {
+		return false;
+	}
+	return $open;
+}
+
+add_filter( 'render_block', 'sa_une_replace_comments_block', 10, 2 );
+
+function sa_une_replace_comments_block( $block_content, $block ) {
+	if ( 'core/comments' !== ( isset( $block['blockName'] ) ? $block['blockName'] : '' ) ) {
+		return $block_content;
+	}
+	if ( ! is_singular( 'post' ) ) {
+		return $block_content;
+	}
+	$post_id = get_the_ID();
+	if ( ! $post_id || ! has_category( 'actualites', (int) $post_id ) ) {
+		return $block_content;
+	}
+	$the_post = get_post( $post_id );
+	if ( ! $the_post ) {
+		return '';
+	}
+	$summary = trim( (string) $the_post->post_excerpt );
+	if ( '' === $summary ) {
+		return ''; // pas de resume genere pour cet article : on retire juste le bloc
+	}
+	return '<div class="sa-resume-article">' . wpautop( esc_html( $summary ) ) . '</div>';
+}
