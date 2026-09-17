@@ -8,7 +8,7 @@
  *              (3) Sur la page de la categorie L'Actu du jour : affiche l'extrait
  *              integral (resume IA de 5 lignes) et ajoute un lien
  *              "Lire l'article complet".
- * Version:     1.1.0
+ * Version:     1.2.0h
  * Author:      Souss Actualites
  */
 
@@ -29,7 +29,7 @@ define( 'SA_LACTU_DU_JOUR_TERM_ID', 16 );
 add_action( 'transition_post_status', 'sa_la_une_auto_sync', 20, 3 );
 
 function sa_la_une_auto_sync( $new_status, $old_status, $post ) {
-    if ( 'publish' !== $new_status || 'publish' === $old_status ) {
+        if ( 'publish' !== $new_status ) {
         return;
     }
     if ( ! $post || 'post' !== $post->post_type ) {
