@@ -26,7 +26,7 @@ const IMPORTANT_CHECK_INTERVAL_MS = parseInt(process.env.IMPORTANT_CHECK_INTERVA
 const SOURCES_FILE = process.env.SOURCES_CONFIG_FILE || path.join(__dirname, 'sources.json');
 const SEEN_DIR = path.join(__dirname, '.seen-sources');
 
-const parser = new Parser();
+const parser = new Parser({ timeout: 15000 }); // 15s max par source — evite le blocage si une source est hors ligne
 const telegram = TELEGRAM_BOT_TOKEN ? makeTelegramClient(TELEGRAM_BOT_TOKEN) : null;
 const eventsApi = BOT_API_SECRET ? makeEventsApi(WP_BASE_URL, BOT_API_SECRET) : null;
 
