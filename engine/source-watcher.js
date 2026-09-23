@@ -274,21 +274,40 @@ async function processItem(source, item) {
     return true;
 }
 
-// Retourne true si le texte semble etre en arabe, francais ou espagnol.
-// Utilise quand source.filter_languages est true pour ignorer les articles
-// en anglais (ou toute autre langue hors perimetre editorial).
+// Retourne true si le texte semble etre en arabe, francais, espagnol,
+// anglais, allemand ou italien. Utilise quand source.filter_languages est
+// true pour ignorer les articles hors de ce perimetre editorial.
+//
+// Elargi le 2026-09-23 sur demande du redacteur en chef : la diaspora
+// marocaine originaire du Souss est nombreuse hors des pays francophones/
+// hispanophones (Allemagne, Italie, Royaume-Uni/Etats-Unis...), donc une
+// source en anglais/allemand/italien qui parlerait d'Agadir/Souss-Massa ne
+// doit plus etre rejetee d'office par ce filtre. Recherche menee le meme
+// jour : aucun media dedie identifie dans ces trois langues pour l'instant
+// (voir echanges avec le redacteur en chef) - ce changement prepare le
+// terrain pour le jour ou une source valide sera trouvee, sans qu'il faille
+// retoucher ce fichier a nouveau.
 function isEditorialLanguage(text) {
     if (!text) return true; // pas de titre = on laisse passer, sera rejete plus loin
     // Arabe : plage Unicode U+0600-U+06FF
     if (/[؀-ۿ]/.test(text)) return true;
     // Espagnol specifique : n tilde, ponctuation inversee
     if (/[ñÑ¡¿]/.test(text)) return true;
-    // Francais/Espagnol : diacritiques latins communs aux deux langues
+    // Diacritiques latins communs au francais/espagnol/allemand/italien
+    // (inclut aussi les umlauts allemands ä/ö/ü/ß et les voyelles accentuees
+    // italiennes à/è/ì/ò/ù, qui tombent dans cette meme plage Unicode).
     if (/[À-ÿ]/.test(text)) return true;
     // Mots grammaticaux francais courants (sans accent)
     if (/\b(le|la|les|de|du|des|un|une|au|aux|et|est|pour|dans|sur|avec|par|qui|que|se|en|il|elle|ils|elles|nous|vous|ce|cette|ces|son|sa|ses|leur|leurs|mais|ou|donc|or|ni|car)\b/i.test(text)) return true;
     // Mots grammaticaux espagnols courants (sans accent)
     if (/\b(el|los|las|del|una|con|por|para|como|pero|mas|sin|sobre|entre|cuando|tambien|hay|puede|han|fue|ser|los)\b/i.test(text)) return true;
+    // Mots grammaticaux anglais courants - l'anglais n'a pas de diacritiques,
+    // donc ce repli lexical est le seul signal disponible.
+    if (/\b(the|and|of|to|in|is|for|on|with|that|by|at|from|as|it|this|be|are|was|were|has|have|an|but|not|we|you|they|his|her|their)\b/i.test(text)) return true;
+    // Mots grammaticaux allemands courants (sans umlaut, en repli si le titre n'en contient pas)
+    if (/\b(der|die|das|und|ist|für|mit|auf|von|zu|nicht|ein|eine|den|dem|des|sich|auch|nach|bei|wird|werden|wurde|sind)\b/i.test(text)) return true;
+    // Mots grammaticaux italiens courants (sans accent, en repli si le titre n'en contient pas)
+    if (/\b(il|lo|la|gli|le|di|che|non|per|con|su|come|anche|dove|questo|questa|sono|hanno|delle|degli|della)\b/i.test(text)) return true;
     return false;
 }
 
