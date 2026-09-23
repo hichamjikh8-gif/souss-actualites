@@ -114,9 +114,6 @@ function buildPostContent(body, title, sourceName, sourceUrl, isFullHtml) {
     const attribution = isArabic
         ? `📰 <strong>المصدر :</strong> <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceName}</a>`
         : `📰 <strong>Source :</strong> <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceName}</a>`;
-    const readMore = isArabic
-        ? `<a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">← اقرأ المقال كاملاً على موقع ${sourceName}</a>`
-        : `<a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">← Lire l'article complet sur ${sourceName}</a>`;
 
     return [
         bodyBlock,
@@ -127,10 +124,6 @@ function buildPostContent(body, title, sourceName, sourceUrl, isFullHtml) {
         '',
         '<!-- wp:paragraph {"className":"syndication-attribution"} -->',
         `<p class="syndication-attribution">${attribution}</p>`,
-        '<!-- /wp:paragraph -->',
-        '',
-        '<!-- wp:paragraph {"className":"syndication-readmore"} -->',
-        `<p class="syndication-readmore">${readMore}</p>`,
         '<!-- /wp:paragraph -->',
     ].join('\n');
 }
