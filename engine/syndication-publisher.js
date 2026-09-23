@@ -84,6 +84,32 @@ function escapeHtml(str) {
 }
 
 /**
+ * Nettoie le HTML brut de content:encoded avant publication. Trouve en prod
+ * le 2026-09-23 (article Barlamane) : certaines sources embarquent leurs
+ * propres widgets (ex. lecteur audio "ecouter l'article") dont le CSS/JS
+ * finit affiche en clair sur la page - wp_kses_post() cote PHP retire bien
+ * les balises <script>/<style> mais laisse leur CONTENU texte intact (quirk
+ * connu de WordPress), donc le nettoyage doit se faire ici, avant l'envoi,
+ * pour ne jamais compter sur wp_kses pour ca. On retire aussi le pied de page
+ * "The post X appeared first on Y" que certains plugins WordPress de flux RSS
+ * integral ajoutent automatiquement - il ferait doublon avec notre propre
+ * attribution (voir buildPostContent) et n'a rien a faire sur ce site.
+ */
+function sanitizeSyndicatedHtml(html) {
+    return html
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
+        .replace(/<p>\s*The post[\s\S]*?appeared first on[\s\S]*?<\/p>/gi, '')
+        // Attributs gestionnaires d'evenements en ligne (onclick, onload...) -
+        // inutiles une fois le <script> associe retire, et a ne jamais laisser
+        // passer par principe dans du contenu syndique.
+        .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
+        .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
+        .trim();
+}
+
+/**
  * Construit le contenu HTML Gutenberg : corps de l'article + separateur +
  * attribution. L'attribution respecte la langue reelle de l'article (bug
  * corrige le 2026-09-17 : le texte etait fige en arabe meme pour les sources
@@ -170,7 +196,7 @@ async function publishSyndicatedArticle(source, item, eventKey, wpBaseUrl, botSe
     // court comme avant : aucune regression pour ces sources-la.
     const fullContentHtml = (item['content:encoded'] || '').toString().trim();
     const hasFullContent = fullContentHtml.length > 0;
-    const body = hasFullContent ? fullContentHtml : shortExcerpt;
+    const body = hasFullContent ? sanitizeSyndicatedHtml(fullContentHtml) : shortExcerpt;
 
     const { categories, isBreaking } = resolveCategories(source.category, title, shortExcerpt);
 
