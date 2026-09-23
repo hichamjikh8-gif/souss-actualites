@@ -13,9 +13,36 @@
     "url": "https://hespress.com/feed",
     "category": "national",
     "enabled": true,
-    "publish_to_sa": false,
+    "publish_to_sa": true,
     "filter_languages": true,
-    "note": "Verifie le 2026-09-16 : flux valide, gros volume. Syndication desactivee le 2026-09-17 sur demande du redacteur en chef — les evenements sont crees mais pas publies automatiquement sur le site."
+    "note": "Verifie le 2026-09-16 : flux valide, gros volume. Syndication reactivee le 2026-09-23 (content:encoded confirme complet : 9203 caracteres vs 839 pour la description) sur demande du redacteur en chef, dans le cadre de l'elargissement du radar a des sources nationales/etrangeres pour les sujets Agadir/Souss-Massa."
+  },
+  {
+    "name": "Barlamane",
+    "url": "https://www.barlamane.com/feed",
+    "category": "national",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Ajoute le 2026-09-23. Verifie : flux valide, content:encoded complet confirme (5710 caracteres vs 770 pour la description)."
+  },
+  {
+    "name": "Alyaoum24",
+    "url": "https://alyaoum24.com/feed",
+    "category": "national",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Ajoute le 2026-09-23. Verifie sur 3 articles : content:encoded complet et coherent (texte se terminant par une phrase entiere, pas de troncature), malgre une <description> tronquee (\"[...]\")."
+  },
+  {
+    "name": "Atalayar",
+    "url": "https://atalayar.com/rss.xml",
+    "category": "international",
+    "enabled": true,
+    "publish_to_sa": true,
+    "filter_languages": true,
+    "note": "Ajoute le 2026-09-23. Media espagnol specialise Maroc/Maghreb. content:encoded complet confirme (article d'analyse de +36000 caracteres). Categorie 'international' choisie (plutot que 'national') pour beneficier du filtre isMoroccoRelevant() deja existant dans source-watcher.js et limiter le bruit hors-Maroc (le media couvre aussi Algerie/Tunisie/Libye) - voir le message a Hicham du 2026-09-23 sur ce choix."
   },
   {
     "name": "La Nouvelle Tribune",

@@ -126,6 +126,41 @@ function isPaywalled(title, excerpt) {
     return PAYWALL_PATTERNS.some((re) => re.test(text));
 }
 
+// Mots-cles Agadir / Souss-Massa (arabe + francais + variantes latines des
+// communes/villes de la region). Sur demande du redacteur en chef
+// (2026-09-23) : le radar peut desormais utiliser des sources nationales et
+// etrangeres (Hespress, Barlamane, Alyaoum24, Atalayar...), mais leur
+// syndication automatique doit se limiter aux articles qui parlent
+// reellement d'Agadir/Souss-Massa - on ne veut pas que ces sources publient
+// leur actualite generale marocaine sur le site. Ne s'applique pas aux
+// sources deja intrinsequement locales (category "local", aujourd'hui
+// seulement Agadir24) : tout leur contenu concerne deja la region par
+// nature, voir leur note dans sources.json.
+const AGADIR_SOUSS_KEYWORDS = [
+    // ville / region
+    'agadir', 'souss-massa', 'souss massa', 'souss', 'massa',
+    'أكادير', 'اكادير', 'سوس ماسة', 'سوس',
+    // communes et villes de la region (les plus citees dans la presse)
+    'inezgane', 'إنزكان', 'انزكان',
+    'ait melloul', 'aït melloul', 'آيت ملول', 'ايت ملول',
+    'taroudant', 'تارودانت',
+    'tiznit', 'تزنيت',
+    'chtouka ait baha', 'chtouka-ait baha', 'اشتوكة آيت باها', 'اشتوكة',
+    'sidi ifni', 'سيدي إفني', 'سيدي افني',
+    'tafraout', 'تافراوت',
+    'biougra', 'بيوكرة',
+    'oulad teima', 'أولاد تايمة', 'اولاد تايمة',
+    'taghazout', 'تاغازوت',
+    'aourir', 'أورير',
+    'imouzzer', 'إموزار',
+    'aoulouz', 'أولوز',
+];
+
+function isAgadirSoussRelevant(title, text) {
+    const haystack = `${title} ${text}`.toLowerCase();
+    return AGADIR_SOUSS_KEYWORDS.some((kw) => haystack.includes(kw.toLowerCase()));
+}
+
 /**
  * Traite un article. Retourne true si l'article a ete gere (evenement cree,
  * ou URL deja connue) et false en cas d'echec transitoire.
@@ -195,11 +230,25 @@ async function processItem(source, item) {
     if (!moroccoOk) {
         console.log(`[${source.name}] Syndication ignoree (hors perimetre Maroc) : ${title}`);
     }
+
+    // Filtre region Agadir/Souss-Massa : ne s'applique qu'aux sources non
+    // intrinsequement locales (tout sauf category "local", aujourd'hui
+    // Agadir24 seulement) - voir AGADIR_SOUSS_KEYWORDS ci-dessus. On verifie
+    // sur le texte le plus complet disponible (content:encoded quand la
+    // source le fournit, sinon l'extrait court) pour ne pas rater un article
+    // qui ne mentionne la region que dans son corps, pas son titre/resume.
+    const isLocalSource = source.category === 'local';
+    const textForRegionCheck = (item['content:encoded'] || excerpt || '').toString();
+    const regionOk = isLocalSource || isAgadirSoussRelevant(title, textForRegionCheck);
+    if (!regionOk) {
+        console.log(`[${source.name}] Syndication ignoree (hors perimetre Agadir/Souss-Massa) : ${title}`);
+    }
+
     const paywalled = isPaywalled(title, excerpt);
     if (paywalled) {
         console.log(`[${source.name}] Syndication ignoree (contenu reserve aux abonnes) : ${title}`);
     }
-    if (moroccoOk && !paywalled && source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey) && !alreadySyndicated) {
+    if (regionOk && moroccoOk && !paywalled && source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey) && !alreadySyndicated) {
         try {
             const result = await publishSyndicatedArticle(source, item, eventKey, WP_BASE_URL, BOT_API_SECRET);
             if (result) {
