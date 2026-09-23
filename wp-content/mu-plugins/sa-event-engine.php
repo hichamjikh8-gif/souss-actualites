@@ -1613,25 +1613,38 @@ add_action( 'sa_syndication_expire_event', 'sa_syndication_expire_old_articles' 
 /**
  * Purge forcee, une seule fois, au premier chargement suivant ce deploiement
  * (2026-09-23, passage de la duree de vie de 8h a 2h sur demande du redacteur
- * en chef) : sans ca, les articles publies entre 2h et 8h avant le passage en
- * production resteraient en ligne jusqu'au prochain passage du cron toutes
- * les 15 minutes. Le drapeau en option evite toute re-execution ulterieure ;
- * le cron recurrent ci-dessus prend le relais normalement ensuite.
+ * en chef) : sans ca, le lot d'articles publies entre 2h et 8h avant le
+ * passage en production resterait en ligne jusqu'au prochain passage du cron
+ * (15 min). Version v2 : la premiere version de cette purge forcee (limitee a
+ * 50 articles, les plus recents en premier par defaut) laissait des articles
+ * Agadir24 vieux de plusieurs jours orphelins - voir sa_syndication_expire_old_articles()
+ * ci-dessous pour le correctif (tri du plus vieux au plus recent + $limit=-1
+ * ici). Le drapeau en option evite toute re-execution ulterieure ; le cron
+ * recurrent reprend le relais normalement ensuite avec sa limite de 50.
  */
 add_action( 'init', function () {
-	if ( ! get_option( 'sa_syndication_force_cleanup_2026_09_23' ) ) {
-		sa_syndication_expire_old_articles();
-		update_option( 'sa_syndication_force_cleanup_2026_09_23', 1 );
+	if ( ! get_option( 'sa_syndication_force_cleanup_2026_09_23_v2' ) ) {
+		// -1 (illimite) plutot que la limite par defaut de 50 : ce passage
+		// unique doit rattraper tout l'historique syndique perime d'un coup
+		// (constate en prod le 2026-09-23 : des articles Agadir24 vieux de
+		// plusieurs jours survivaient encore, le tri par defaut de WP_Query
+		// traitant les plus RECENTS en premier, jamais les plus vieux, tant
+		// qu'un gros lot recent existait - voir aussi le tri explicite
+		// ci-dessous, du plus vieux au plus recent, corrige pour de bon).
+		sa_syndication_expire_old_articles( -1 );
+		update_option( 'sa_syndication_force_cleanup_2026_09_23_v2', 1 );
 	}
 } );
 
-function sa_syndication_expire_old_articles() {
+function sa_syndication_expire_old_articles( $limit = 50 ) {
 	$cutoff = gmdate( 'Y-m-d H:i:s', time() - SA_SYNDICATION_LIFETIME_HOURS * HOUR_IN_SECONDS );
 
 	$query = new WP_Query( array(
 		'post_type'      => 'post',
 		'post_status'    => 'publish',
-		'posts_per_page' => 50,
+		'posts_per_page' => $limit,
+		'orderby'        => 'date',
+		'order'          => 'ASC', // les plus vieux d'abord : garantit qu'un gros lot recent ne fait jamais patienter indefiniment les plus anciens.
 		'meta_key'       => '_syndication_source',
 		'date_query'     => array(
 			array( 'column' => 'post_date_gmt', 'before' => $cutoff, 'inclusive' => true ),
