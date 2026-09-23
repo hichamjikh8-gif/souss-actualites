@@ -1,6 +1,7 @@
 const Parser = require('rss-parser');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const parser = new Parser();
 
@@ -12,7 +13,13 @@ const ADMIN_TELEGRAM_ID = process.env.ADMIN_TELEGRAM_ID;
 const CHECK_INTERVAL_MS = parseInt(process.env.CHECK_INTERVAL_MS || '300000', 10); // 5 minutes
 const FACEBOOK_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
 const FACEBOOK_PAGE_ACCESS_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
-const X_BEARER_TOKEN = process.env.X_BEARER_TOKEN;
+// X (Twitter) : le compte configure le 2026-09-23 utilise des cles OAuth 1.0a
+// "user context" (4 valeurs), pas un Bearer token OAuth2 - X ne les affiche
+// qu'une fois a la creation/regeneration, jamais ensuite.
+const X_CONSUMER_KEY = process.env.X_CONSUMER_KEY;
+const X_CONSUMER_SECRET = process.env.X_CONSUMER_SECRET;
+const X_ACCESS_TOKEN = process.env.X_ACCESS_TOKEN;
+const X_ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET;
 
 const SEEN_FILE = path.join(__dirname, 'seen.json');
 
@@ -98,13 +105,47 @@ async function sendFacebookPost(item) {
     return data.id; // post_id retourne par Facebook
 }
 
-// Publie l'article sur X (Twitter) via l'API v2 POST /2/tweets.
-// Ne fait rien si X_BEARER_TOKEN est absent (meme degradation gracieuse que
-// Facebook ci-dessus). NB : X exige un token OAuth avec le droit tweet.write
-// (pas un bearer app-only en lecture seule) - meme mecanisme que celui deja
-// utilise cote PHP pour le bouton "Publier maintenant" (sa-event-engine.php).
+// Encodage pourcentage conforme RFC 3986 exige par OAuth 1.0a - encodeURIComponent
+// seul laisse passer !*'() non encodes, que la spec OAuth veut encodes.
+function oauthPercentEncode(str) {
+    return encodeURIComponent(str).replace(/[!*'()]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+// Construit l'en-tete Authorization OAuth 1.0a (HMAC-SHA1) pour une requete
+// POST sans parametres de requete/formulaire (notre corps est du JSON, donc
+// hors signature - seuls les parametres oauth_* entrent dans la base string,
+// voir la doc OAuth 1.0a / X : https://developer.x.com/en/docs/authentication/oauth-1-0a/creating-a-signature).
+function buildOAuth1Header(method, url) {
+    const oauthParams = {
+        oauth_consumer_key: X_CONSUMER_KEY,
+        oauth_nonce: crypto.randomBytes(16).toString('hex'),
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+        oauth_token: X_ACCESS_TOKEN,
+        oauth_version: '1.0',
+    };
+    const paramString = Object.keys(oauthParams)
+        .sort()
+        .map((k) => `${oauthPercentEncode(k)}=${oauthPercentEncode(oauthParams[k])}`)
+        .join('&');
+    const baseString = [method.toUpperCase(), oauthPercentEncode(url), oauthPercentEncode(paramString)].join('&');
+    const signingKey = `${oauthPercentEncode(X_CONSUMER_SECRET)}&${oauthPercentEncode(X_ACCESS_TOKEN_SECRET)}`;
+    const signature = crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
+
+    const headerParams = { ...oauthParams, oauth_signature: signature };
+    return 'OAuth ' + Object.keys(headerParams)
+        .sort()
+        .map((k) => `${oauthPercentEncode(k)}="${oauthPercentEncode(headerParams[k])}"`)
+        .join(', ');
+}
+
+// Publie l'article sur X (Twitter) via l'API v2 POST /2/tweets, signe en
+// OAuth 1.0a "user context" (Consumer Key/Secret + Access Token/Secret) -
+// c'est le type de cles que le compte @hiz_hisham a deja generees le
+// 2026-08-01 (lecture+ecriture), pas un Bearer token OAuth2. Ne fait rien si
+// l'une des 4 valeurs manque (meme degradation gracieuse que Facebook).
 async function sendXPost(item) {
-    if (!X_BEARER_TOKEN) return null;
+    if (!X_CONSUMER_KEY || !X_CONSUMER_SECRET || !X_ACCESS_TOKEN || !X_ACCESS_TOKEN_SECRET) return null;
 
     // X compte tout lien comme 23 caracteres (raccourci automatique via t.co)
     // quelle que soit sa longueur reelle : on reserve cette place pour le
@@ -116,10 +157,11 @@ async function sendXPost(item) {
         : item.title;
     const text = `${title}\n${item.link}`;
 
-    const response = await fetch('https://api.twitter.com/2/tweets', {
+    const url = 'https://api.twitter.com/2/tweets';
+    const response = await fetch(url, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${X_BEARER_TOKEN}`,
+            'Authorization': buildOAuth1Header('POST', url),
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({ text }),

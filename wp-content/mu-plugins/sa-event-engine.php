@@ -453,17 +453,70 @@ function sa_event_social_channel_configured( $channel ) {
 		return defined( 'FACEBOOK_PAGE_ID' ) && FACEBOOK_PAGE_ID !== '' && defined( 'FACEBOOK_PAGE_ACCESS_TOKEN' ) && FACEBOOK_PAGE_ACCESS_TOKEN !== '';
 	}
 	if ( 'x' === $channel ) {
-		return defined( 'X_BEARER_TOKEN' ) && X_BEARER_TOKEN !== '';
+		return defined( 'X_CONSUMER_KEY' ) && X_CONSUMER_KEY !== ''
+			&& defined( 'X_CONSUMER_SECRET' ) && X_CONSUMER_SECRET !== ''
+			&& defined( 'X_ACCESS_TOKEN' ) && X_ACCESS_TOKEN !== ''
+			&& defined( 'X_ACCESS_TOKEN_SECRET' ) && X_ACCESS_TOKEN_SECRET !== '';
 	}
 	return false; // telegram et newsletter restent volontairement manuels pour l'instant.
 }
 
 /**
+ * Encodage pourcentage conforme RFC 3986 exige par OAuth 1.0a. rawurlencode()
+ * de PHP suit deja RFC 3986 (contrairement a l'equivalent JS encodeURIComponent,
+ * qui laisse passer !*'() non encodes - voir la version Node de cette meme
+ * fonction dans engine/rss-watcher.js, qui doit compenser cet ecart).
+ */
+function sa_event_oauth1_percent_encode( $str ) {
+	return rawurlencode( (string) $str );
+}
+
+/**
+ * Construit l'en-tete Authorization OAuth 1.0a (HMAC-SHA1) pour une requete
+ * POST sans parametres de requete/formulaire (le corps est du JSON, donc hors
+ * signature). Algorithme identique a celui utilise cote Node
+ * (engine/rss-watcher.js), verifie contre l'exemple officiel de la RFC 5849
+ * (section 1.2) le 2026-09-23.
+ */
+function sa_event_build_oauth1_header( $method, $url ) {
+	$oauth_params = array(
+		'oauth_consumer_key'     => X_CONSUMER_KEY,
+		'oauth_nonce'            => wp_generate_password( 32, false ),
+		'oauth_signature_method' => 'HMAC-SHA1',
+		'oauth_timestamp'        => (string) time(),
+		'oauth_token'            => X_ACCESS_TOKEN,
+		'oauth_version'          => '1.0',
+	);
+
+	$pairs = array();
+	ksort( $oauth_params );
+	foreach ( $oauth_params as $key => $value ) {
+		$pairs[] = sa_event_oauth1_percent_encode( $key ) . '=' . sa_event_oauth1_percent_encode( $value );
+	}
+	$param_string = implode( '&', $pairs );
+
+	$base_string = strtoupper( $method ) . '&' . sa_event_oauth1_percent_encode( $url ) . '&' . sa_event_oauth1_percent_encode( $param_string );
+	$signing_key = sa_event_oauth1_percent_encode( X_CONSUMER_SECRET ) . '&' . sa_event_oauth1_percent_encode( X_ACCESS_TOKEN_SECRET );
+	$signature   = base64_encode( hash_hmac( 'sha1', $base_string, $signing_key, true ) );
+
+	$header_params            = $oauth_params;
+	$header_params['oauth_signature'] = $signature;
+	ksort( $header_params );
+
+	$header_pairs = array();
+	foreach ( $header_params as $key => $value ) {
+		$header_pairs[] = sa_event_oauth1_percent_encode( $key ) . '="' . sa_event_oauth1_percent_encode( $value ) . '"';
+	}
+	return 'OAuth ' . implode( ', ', $header_pairs );
+}
+
+/**
  * Publie reellement sur Facebook (Graph API - /{page-id}/feed) ou X (API v2 -
- * /2/tweets, contexte utilisateur via Bearer token OAuth2). NON TESTE contre
- * de vrais identifiants au moment de l'ecriture (aucun n'existe encore sur ce
- * projet) - suit la documentation officielle de chaque API, mais Hicham doit
- * verifier avec un premier post a faible enjeu avant de compter dessus.
+ * /2/tweets, signe en OAuth 1.0a "user context" - c'est le type de cles
+ * generees pour le compte @hiz_hisham le 2026-08-01, pas un Bearer OAuth2).
+ * NON TESTE contre de vrais identifiants au moment de l'ecriture - suit la
+ * documentation officielle de chaque API, mais Hicham doit verifier avec un
+ * premier post a faible enjeu avant de compter dessus.
  * Retourne true en cas de succes, ou une chaine d'erreur explicite sinon.
  */
 function sa_event_social_publish_to_channel( $channel, $content, $article_url = '' ) {
@@ -494,10 +547,11 @@ function sa_event_social_publish_to_channel( $channel, $content, $article_url = 
 	}
 
 	if ( 'x' === $channel ) {
-		$response = wp_remote_post( 'https://api.twitter.com/2/tweets', array(
+		$x_url    = 'https://api.twitter.com/2/tweets';
+		$response = wp_remote_post( $x_url, array(
 			'timeout' => 15,
 			'headers' => array(
-				'Authorization' => 'Bearer ' . X_BEARER_TOKEN,
+				'Authorization' => sa_event_build_oauth1_header( 'POST', $x_url ),
 				'Content-Type'  => 'application/json',
 			),
 			'body'    => wp_json_encode( array( 'text' => $content ) ),
