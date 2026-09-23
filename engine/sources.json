@@ -4,9 +4,9 @@
     "url": "https://agadir24.info/feed",
     "category": "local",
     "enabled": true,
-    "publish_to_sa": true,
+    "publish_to_sa": false,
     "filter_languages": true,
-    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, articles du jour, specifique Agadir/Souss-Massa. Priorite locale demandee par le redacteur en chef."
+    "note": "Verifie le 2026-09-16 : flux RSS 2.0 valide, articles du jour, specifique Agadir/Souss-Massa. Syndication automatique desactivee le 2026-09-23 sur demande du redacteur en chef (le flux ne fournit pas l'article complet et il ne veut pas de scraping) - la veille reste active : les evenements continuent d'etre crees (detection/radar inchanges), seule la publication automatique sur le site est coupee."
   },
   {
     "name": "Hespress",
