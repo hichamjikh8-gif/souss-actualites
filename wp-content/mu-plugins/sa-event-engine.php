@@ -1634,6 +1634,17 @@ add_action( 'init', function () {
 		sa_syndication_expire_old_articles( -1 );
 		update_option( 'sa_syndication_force_cleanup_2026_09_23_v2', 1 );
 	}
+	if ( ! get_option( 'sa_syndication_force_cleanup_2026_09_23_v3' ) ) {
+		// v2 s'appuie sur la meta _syndication_source, mais les tout premiers
+		// articles syndiques (ex. Agadir24 du 2026-09-17, avant l'ajout de
+		// l'image a la une automatique) n'ont jamais eu cette meta - constate
+		// en prod : ils n'ont pas non plus de featured_media, signe qu'ils
+		// viennent d'une version plus ancienne de l'endpoint /syndicate.
+		// sa_syndication_expire_legacy_undated_articles() les repere par leur
+		// contenu (classe CSS syndication-attribution) au lieu de la meta.
+		sa_syndication_expire_legacy_undated_articles();
+		update_option( 'sa_syndication_force_cleanup_2026_09_23_v3', 1 );
+	}
 } );
 
 function sa_syndication_expire_old_articles( $limit = 50 ) {
@@ -1662,6 +1673,40 @@ function sa_syndication_expire_old_articles( $limit = 50 ) {
 		error_log( sprintf(
 			'[sa-syndication-expire] article syndique #%d supprime definitivement (age > %dh)',
 			$post_id, SA_SYNDICATION_LIFETIME_HOURS
+		) );
+	}
+}
+
+/**
+ * Purge ponctuelle (voir le drapeau v3 ci-dessus) des articles syndiques
+ * heritage sans meta _syndication_source, reperes par leur contenu plutot
+ * que par la meta. N'est jamais appelee par le cron recurrent : desormais
+ * tout nouvel article syndique recoit systematiquement cette meta (voir
+ * telegram-bot-api.php), donc ce repli par contenu n'a plus de raison d'etre
+ * au-dela de ce rattrapage initial.
+ */
+function sa_syndication_expire_legacy_undated_articles() {
+	global $wpdb;
+	$cutoff = gmdate( 'Y-m-d H:i:s', time() - SA_SYNDICATION_LIFETIME_HOURS * HOUR_IN_SECONDS );
+
+	$post_ids = $wpdb->get_col( $wpdb->prepare(
+		"SELECT ID FROM {$wpdb->posts}
+		 WHERE post_type = 'post' AND post_status = 'publish'
+		 AND post_content LIKE %s
+		 AND post_date_gmt < %s",
+		'%class="syndication-attribution%',
+		$cutoff
+	) );
+
+	foreach ( $post_ids as $post_id ) {
+		$thumbnail_id = get_post_thumbnail_id( $post_id );
+		$deleted      = wp_delete_post( $post_id, true );
+		if ( $deleted && $thumbnail_id ) {
+			wp_delete_attachment( $thumbnail_id, true );
+		}
+		error_log( sprintf(
+			'[sa-syndication-expire] article syndique heritage #%d supprime definitivement (sans meta _syndication_source)',
+			$post_id
 		) );
 	}
 }
