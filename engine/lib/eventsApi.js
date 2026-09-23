@@ -13,6 +13,7 @@ function makeEventsApi(baseUrl, secret) {
             const message = data && data.message ? data.message : `HTTP ${response.status}`;
             const err = new Error(`Erreur API Events (${pathname}): ${message}`);
             err.eventKey = data && data.data && data.data.event_key;
+            err.event = data && data.data && data.data.event;
             throw err;
         }
         return data;
@@ -37,6 +38,8 @@ function makeEventsApi(baseUrl, secret) {
             request('/link-flash', { method: 'POST', body: JSON.stringify({ event_key: eventKey, flash_id: flashId, actor }) }),
         promoteToArticle: (eventKey, actor) =>
             request('/promote-to-article', { method: 'POST', body: JSON.stringify({ event_key: eventKey, actor }) }),
+        markSyndicated: (eventKey, postId, actor) =>
+            request('/mark-syndicated', { method: 'POST', body: JSON.stringify({ event_key: eventKey, post_id: postId, actor }) }),
         prepareSocialPost: (eventKey, channel, content, actor) =>
             request('/social-pack', {
                 method: 'POST',

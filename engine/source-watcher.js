@@ -139,6 +139,11 @@ async function processItem(source, item) {
     if (!title) return true;
 
     let eventKey = null;
+    // Vrai si l'evenement (nouveau ou deja connu par son URL) porte deja une
+    // marque de syndication en base (sa_events.syndicated_post_id) - source de
+    // verite durable, contrairement au Set local `syndicated` qui peut etre
+    // perdu si le conteneur redemarre sans le cache engine/.seen-sources/.
+    let alreadySyndicated = false;
 
     try {
         let similarWarning = '';
@@ -166,10 +171,12 @@ async function processItem(source, item) {
             },
         });
         eventKey = created.event_key;
+        alreadySyndicated = Boolean(created.syndicated_post_id);
         console.log(`[${source.name}] Nouvel evenement ${eventKey} : ${title}${similarWarning}`);
     } catch (err) {
         if (err.eventKey) {
             eventKey = err.eventKey; // URL deja connue → on connait quand meme l'event_key
+            alreadySyndicated = Boolean(err.event && err.event.syndicated_post_id);
             console.log(`[${source.name}] URL deja suivie (evenement ${eventKey}), ignoree.`);
         } else {
             console.error(`[${source.name}] Echec creation evenement pour "${title}" (sera retente) :`, err.message);
@@ -192,12 +199,18 @@ async function processItem(source, item) {
     if (paywalled) {
         console.log(`[${source.name}] Syndication ignoree (contenu reserve aux abonnes) : ${title}`);
     }
-    if (moroccoOk && !paywalled && source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey)) {
+    if (moroccoOk && !paywalled && source.publish_to_sa && BOT_API_SECRET && eventKey && !syndicated.has(eventKey) && !alreadySyndicated) {
         try {
             const result = await publishSyndicatedArticle(source, item, eventKey, WP_BASE_URL, BOT_API_SECRET);
             if (result) {
                 syndicated.add(eventKey);
                 saveSyndicated(syndicated);
+                // Marque durable en base : meme si engine/.seen-sources/ est perdu
+                // (redemarrage du conteneur), cet article ne sera plus republie -
+                // voir sa_event_mark_syndicated() et la purge 8h dans sa-event-engine.php.
+                await eventsApi.markSyndicated(eventKey, result.post_id, `watcher:${source.name}`).catch((err) => {
+                    console.error(`[${source.name}] Echec marquage syndicated en base pour ${eventKey}:`, err.message);
+                });
                 // Notification Telegram admin (optionnel - non bloquant)
                 await notifyAdmin(
                     `📰 Syndication : "${title}"\nSource : ${source.name}\n🔗 ${result.post_url}`

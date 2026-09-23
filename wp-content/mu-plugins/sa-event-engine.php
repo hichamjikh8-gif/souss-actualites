@@ -87,6 +87,12 @@ function sa_event_maybe_create_tables() {
 		update_option( 'sa_event_engine_db_version', 2 );
 		$version = 2;
 	}
+
+	if ( $version < 3 ) {
+		sa_event_create_tables_v3( $charset );
+		update_option( 'sa_event_engine_db_version', 3 );
+		$version = 3;
+	}
 }
 
 function sa_event_create_tables_v1( $charset ) {
@@ -165,6 +171,18 @@ function sa_event_create_tables_v2( $charset ) {
 		) {$charset}"
 	);
 }
+
+/**
+ * Ajoute les colonnes utilisees par sa_event_mark_syndicated() ci-dessous.
+ */
+function sa_event_create_tables_v3( $charset ) {
+	global $wpdb;
+	$events = sa_event_table_events();
+	$existing = $wpdb->get_col( "SHOW COLUMNS FROM {$events} LIKE 'syndicated_post_id'" );
+	if ( empty( $existing ) ) {
+		$wpdb->query( "ALTER TABLE {$events} ADD COLUMN syndicated_post_id BIGINT(20) NULL DEFAULT NULL, ADD COLUMN syndicated_at DATETIME NULL DEFAULT NULL" );
+	}
+}
 add_action( 'init', 'sa_event_maybe_create_tables' );
 
 /* ------------------------------- HELPERS ----------------------------------- */
@@ -178,6 +196,21 @@ function sa_event_log( $event_id, $actor, $action, $detail = array() ) {
 		'detail'     => wp_json_encode( $detail ),
 		'created_at' => current_time( 'mysql' ),
 	), array( '%d', '%s', '%s', '%s', '%s' ) );
+}
+
+/**
+ * Marque durablement (en base, pas seulement dans le cache local de
+ * engine/.seen-sources/ qui peut etre perdu au redemarrage du conteneur
+ * Railway) qu'un evenement a deja ete syndique - empeche une republication
+ * de l'article si la meme URL/le meme evenement est revu plus tard.
+ */
+function sa_event_mark_syndicated( $event_id, $post_id ) {
+	global $wpdb;
+	return $wpdb->update( sa_event_table_events(),
+		array( 'syndicated_post_id' => (int) $post_id, 'syndicated_at' => current_time( 'mysql' ) ),
+		array( 'id' => (int) $event_id ),
+		array( '%d', '%s' ), array( '%d' )
+	);
 }
 
 function sa_event_touch( $event_id ) {
@@ -837,6 +870,8 @@ add_action( 'rest_api_init', function () {
 			'article_post_id'   => $row->article_post_id ? (int) $row->article_post_id : null,
 			'article_url'       => $row->article_post_id ? get_permalink( (int) $row->article_post_id ) : null,
 			'merged_into'       => $row->merged_into ? (int) $row->merged_into : null,
+			'syndicated_post_id' => isset( $row->syndicated_post_id ) && $row->syndicated_post_id ? (int) $row->syndicated_post_id : null,
+			'syndicated_at'     => isset( $row->syndicated_at ) ? $row->syndicated_at : null,
 			'created_by'        => $row->created_by,
 			'first_detected_at' => $row->first_detected_at,
 			'last_updated_at'   => $row->last_updated_at,
@@ -991,6 +1026,7 @@ add_action( 'rest_api_init', function () {
 					return new WP_Error( 'duplicate', "Cette URL est deja rattachee a l'evenement {$existing}.", array(
 						'status'    => 409,
 						'event_key' => $existing,
+						'event'     => $shape_event( sa_event_get_by_key( $existing ), false ),
 					) );
 				}
 			}
@@ -1183,6 +1219,32 @@ add_action( 'rest_api_init', function () {
 			$event_key = (string) $request->get_param( 'event_key' );
 			$actor     = sanitize_text_field( (string) ( $request->get_param( 'actor' ) ?: 'agent' ) );
 			return sa_event_promote_to_article( $event_key, $actor );
+		},
+	) );
+
+	// POST /mark-syndicated { event_key, post_id, actor? }
+	// Enregistre en base (durable, contrairement au cache local de la veille)
+	// qu'un article syndique a deja ete publie pour cet evenement, pour que
+	// l'article ne soit jamais republie meme si le conteneur "sources" perd
+	// son cache local (engine/.seen-sources/) - voir sa_event_mark_syndicated().
+	register_rest_route( 'sa-events/v1', '/mark-syndicated', array(
+		'methods'             => 'POST',
+		'permission_callback' => $permission,
+		'callback'            => function ( WP_REST_Request $request ) use ( $shape_event ) {
+			$event_key = (string) $request->get_param( 'event_key' );
+			$post_id   = (int) $request->get_param( 'post_id' );
+			$row       = sa_event_get_by_key( $event_key );
+			if ( ! $row ) {
+				return new WP_Error( 'not_found', 'Evenement introuvable.', array( 'status' => 404 ) );
+			}
+			if ( ! $post_id ) {
+				return new WP_Error( 'bad_request', 'post_id requis.', array( 'status' => 400 ) );
+			}
+			$actor = sanitize_text_field( (string) ( $request->get_param( 'actor' ) ?: 'agent' ) );
+			sa_event_mark_syndicated( $row->id, $post_id );
+			sa_event_log( $row->id, $actor, 'syndicated', array( 'post_id' => $post_id ) );
+
+			return $shape_event( sa_event_get_by_key( $event_key ), false );
 		},
 	) );
 
@@ -1515,6 +1577,65 @@ function sa_event_admin_page() {
 		</table>
 	</div>
 	<?php
+}
+
+/* ------------------ EXPIRATION DES ARTICLES SYNDIQUES (8H) -----------------
+ * Sur demande du redacteur en chef (2026-09-23) : un article syndique
+ * automatiquement (voir engine/syndication-publisher.js, meta
+ * _syndication_source) ne doit rester en ligne que 8 heures, puis etre
+ * supprime DEFINITIVEMENT (pas seulement mis a la corbeille) pour ne jamais
+ * reapparaitre. Ne touche jamais un article sans cette meta : les articles
+ * ecrits/publies manuellement par le redacteur en chef, ou publies depuis un
+ * brouillon prepare par l'Event Engine, ne l'ont pas et restent intacts.
+ * La non-republication ulterieure du meme article est assuree cote veille par
+ * sa_event_mark_syndicated() (colonne durable en base), pas par cette purge.
+ * ---------------------------------------------------------------------------
+ */
+
+const SA_SYNDICATION_LIFETIME_HOURS = 8;
+
+add_filter( 'cron_schedules', function ( $schedules ) {
+	$schedules['sa_fifteen_minutes'] = array(
+		'interval' => 15 * MINUTE_IN_SECONDS,
+		'display'  => __( 'Toutes les 15 minutes (Souss Actualites)' ),
+	);
+	return $schedules;
+} );
+
+add_action( 'init', function () {
+	if ( ! wp_next_scheduled( 'sa_syndication_expire_event' ) ) {
+		wp_schedule_event( time(), 'sa_fifteen_minutes', 'sa_syndication_expire_event' );
+	}
+} );
+
+add_action( 'sa_syndication_expire_event', 'sa_syndication_expire_old_articles' );
+
+function sa_syndication_expire_old_articles() {
+	$cutoff = gmdate( 'Y-m-d H:i:s', time() - SA_SYNDICATION_LIFETIME_HOURS * HOUR_IN_SECONDS );
+
+	$query = new WP_Query( array(
+		'post_type'      => 'post',
+		'post_status'    => 'publish',
+		'posts_per_page' => 50,
+		'meta_key'       => '_syndication_source',
+		'date_query'     => array(
+			array( 'column' => 'post_date_gmt', 'before' => $cutoff, 'inclusive' => true ),
+		),
+		'fields'         => 'ids',
+		'no_found_rows'  => true,
+	) );
+
+	foreach ( $query->posts as $post_id ) {
+		$thumbnail_id = get_post_thumbnail_id( $post_id );
+		$deleted      = wp_delete_post( $post_id, true );
+		if ( $deleted && $thumbnail_id ) {
+			wp_delete_attachment( $thumbnail_id, true );
+		}
+		error_log( sprintf(
+			'[sa-syndication-expire] article syndique #%d supprime definitivement (age > %dh)',
+			$post_id, SA_SYNDICATION_LIFETIME_HOURS
+		) );
+	}
 }
 
 /* --------------------- RESUME AUTOMATIQUE "A LA UNE" -----------------------
