@@ -1645,6 +1645,19 @@ add_action( 'init', function () {
 		sa_syndication_expire_legacy_undated_articles();
 		update_option( 'sa_syndication_force_cleanup_2026_09_23_v3', 1 );
 	}
+	// Suppression definitive demandee par le redacteur en chef le 2026-09-23 :
+	// article #11394 (bandeau meteo Barlamane touche par la fuite CSS/JS
+	// corrigee le meme jour, voir sanitizeSyndicatedHtml() cote Node). Action
+	// ponctuelle sur un article precis, pas une regle generale - le drapeau
+	// evite toute re-execution.
+	if ( ! get_option( 'sa_delete_post_11394_2026_09_23' ) ) {
+		$thumbnail_id = get_post_thumbnail_id( 11394 );
+		$deleted      = wp_delete_post( 11394, true );
+		if ( $deleted && $thumbnail_id ) {
+			wp_delete_attachment( $thumbnail_id, true );
+		}
+		update_option( 'sa_delete_post_11394_2026_09_23', 1 );
+	}
 } );
 
 function sa_syndication_expire_old_articles( $limit = 50 ) {
