@@ -1592,7 +1592,7 @@ function sa_event_admin_page() {
  * ---------------------------------------------------------------------------
  */
 
-const SA_SYNDICATION_LIFETIME_HOURS = 8;
+const SA_SYNDICATION_LIFETIME_HOURS = 2;
 
 add_filter( 'cron_schedules', function ( $schedules ) {
 	$schedules['sa_fifteen_minutes'] = array(
@@ -1609,6 +1609,21 @@ add_action( 'init', function () {
 } );
 
 add_action( 'sa_syndication_expire_event', 'sa_syndication_expire_old_articles' );
+
+/**
+ * Purge forcee, une seule fois, au premier chargement suivant ce deploiement
+ * (2026-09-23, passage de la duree de vie de 8h a 2h sur demande du redacteur
+ * en chef) : sans ca, les articles publies entre 2h et 8h avant le passage en
+ * production resteraient en ligne jusqu'au prochain passage du cron toutes
+ * les 15 minutes. Le drapeau en option evite toute re-execution ulterieure ;
+ * le cron recurrent ci-dessus prend le relais normalement ensuite.
+ */
+add_action( 'init', function () {
+	if ( ! get_option( 'sa_syndication_force_cleanup_2026_09_23' ) ) {
+		sa_syndication_expire_old_articles();
+		update_option( 'sa_syndication_force_cleanup_2026_09_23', 1 );
+	}
+} );
 
 function sa_syndication_expire_old_articles() {
 	$cutoff = gmdate( 'Y-m-d H:i:s', time() - SA_SYNDICATION_LIFETIME_HOURS * HOUR_IN_SECONDS );
