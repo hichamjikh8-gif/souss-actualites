@@ -48,12 +48,13 @@ function souss_ads_campaigns() {
 			'cta'        => 'Decouvrir Atlas Depeche',
 		),
 		'zainbella' => array(
-			'advertiser' => 'ZAINBELLA',
-			'tagline'    => 'Beaute europeenne, a un clic.',
-			'headline'   => "L'Oreal Paris BB Creme 5-en-1",
-			'image'      => 'https://zainbella.com/assets/images/l-oreal-paris-bb-creme-5-en-1-hydratation-24-h-texture-tres-legere-spf-11-30-ml-f4495ac3.png',
-			'url'        => 'https://zainbella.com/',
-			'cta'        => 'Decouvrir Zainbella',
+			'advertiser'      => 'ZAINBELLA',
+			'tagline'         => 'Beaute europeenne, a un clic.',
+			'headline'        => "L'Oreal Paris BB Creme 5-en-1",
+			'image'           => '', // le logo fourni est une scene 3D chargee (sac + icones reseaux) illisible en petit format : badge degrade aux couleurs de la marque a la place
+			'badge_gradient'  => 'linear-gradient(135deg, #ff5ca8, #b34bde 50%, #6a3df5)',
+			'url'             => 'https://zainbella.com/',
+			'cta'             => 'Decouvrir Zainbella',
 		),
 	) );
 }
@@ -116,9 +117,13 @@ function souss_ads_render_visual( $campaign ) {
 	}
 
 	$initial = mb_substr( trim( $campaign['advertiser'] ), 0, 1 );
+	$style   = ! empty( $campaign['badge_gradient'] )
+		? sprintf( ' style="background-image:%s"', esc_attr( $campaign['badge_gradient'] ) )
+		: '';
 
 	return sprintf(
-		'<div class="souss-ad__img souss-ad__img--badge" aria-hidden="true"><span>%s</span></div>',
+		'<div class="souss-ad__img souss-ad__img--badge" aria-hidden="true"%1$s><span>%2$s</span></div>',
+		$style,
 		esc_html( $initial )
 	);
 }

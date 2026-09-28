@@ -47,6 +47,14 @@
 .souss-ad__inner.is-visible {
 	opacity: 1;
 	transform: translateY(0) scale(1);
+	animation: souss-ad-float 7s ease-in-out infinite;
+}
+
+@keyframes souss-ad-float {
+	0%, 100% { transform: translateY(0) scale(1) rotateX(0deg) rotateY(0deg); }
+	25% { transform: translateY(-2px) scale(1) rotateX(3deg) rotateY(-5deg); }
+	50% { transform: translateY(0) scale(1) rotateX(0deg) rotateY(0deg); }
+	75% { transform: translateY(2px) scale(1) rotateX(-3deg) rotateY(5deg); }
 }
 
 .souss-ad__inner:hover {
@@ -180,6 +188,7 @@
 	.souss-ad__inner {
 		transition: opacity 0.2s ease;
 		transform: none !important;
+		animation: none !important;
 	}
 	.souss-ad__inner.is-visible {
 		opacity: 1;
