@@ -1,0 +1,187 @@
+/* Souss Actualites - carte publicitaire native (remplace les interstitiels plein ecran) */
+
+.souss-ad {
+	position: relative;
+	margin: 28px auto;
+	max-width: 460px;
+	perspective: 900px;
+}
+
+.souss-ad__label {
+	position: absolute;
+	top: -10px;
+	left: 14px;
+	z-index: 2;
+	font-size: 10px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: #cbb676;
+	background: #141414;
+	padding: 2px 8px;
+	border-radius: 4px;
+	border: 1px solid rgba(203, 182, 118, 0.4);
+}
+
+.souss-ad__link {
+	display: block;
+	text-decoration: none;
+	color: inherit;
+}
+
+.souss-ad__inner {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 18px;
+	border-radius: 16px;
+	background: linear-gradient(155deg, #161616 0%, #0b0b0b 100%);
+	border: 1px solid rgba(203, 182, 118, 0.25);
+	box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+	transform-style: preserve-3d;
+	will-change: transform;
+	opacity: 0;
+	transform: translateY(14px) scale(0.98);
+	transition: transform 0.45s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.45s ease, box-shadow 0.2s ease;
+}
+
+.souss-ad__inner.is-visible {
+	opacity: 1;
+	transform: translateY(0) scale(1);
+}
+
+.souss-ad__inner:hover {
+	box-shadow: 0 16px 36px -14px rgba(203, 182, 118, 0.35);
+}
+
+.souss-ad__img {
+	flex: 0 0 auto;
+	width: 72px;
+	height: 72px;
+	border-radius: 12px;
+	object-fit: cover;
+	background: #fff;
+	transform: translateZ(24px);
+}
+
+.souss-ad__img--badge {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: linear-gradient(135deg, #7b3fe4, #e0507a 45%, #4f8ff0);
+	background-size: 200% 200%;
+	animation: souss-ad-gradient 6s ease infinite;
+	font-size: 26px;
+	font-weight: 800;
+	color: #fff;
+	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes souss-ad-gradient {
+	0% { background-position: 0% 50%; }
+	50% { background-position: 100% 50%; }
+	100% { background-position: 0% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.souss-ad__img--badge {
+		animation: none;
+	}
+}
+
+.souss-ad__body {
+	min-width: 0;
+	transform: translateZ(12px);
+}
+
+.souss-ad__brand {
+	margin: 0 0 2px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #cbb676;
+}
+
+.souss-ad__headline {
+	margin: 0 0 2px;
+	font-size: 14px;
+	font-weight: 600;
+	color: #f2ede1;
+	line-height: 1.3;
+}
+
+.souss-ad__tagline {
+	margin: 0 0 6px;
+	font-size: 12px;
+	color: #9a9488;
+}
+
+.souss-ad__cta {
+	display: inline-block;
+	font-size: 12px;
+	font-weight: 600;
+	color: #0b0b0b;
+	background: linear-gradient(135deg, #f0d78c, #cbb676);
+	padding: 5px 12px;
+	border-radius: 999px;
+}
+
+/* Carte flottante (desactivee par defaut cote PHP) */
+.souss-ad--floating {
+	position: fixed;
+	right: 16px;
+	bottom: 16px;
+	z-index: 40;
+	max-width: 300px;
+	margin: 0;
+}
+
+.souss-ad--floating .souss-ad__inner {
+	padding: 12px;
+}
+
+.souss-ad--floating .souss-ad__img {
+	width: 52px;
+	height: 52px;
+}
+
+.souss-ad__dismiss {
+	position: absolute;
+	top: -8px;
+	right: -8px;
+	z-index: 3;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	border: 1px solid rgba(203, 182, 118, 0.4);
+	background: #141414;
+	color: #cbb676;
+	font-size: 13px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.souss-ad--floating.is-dismissed {
+	display: none;
+}
+
+@media (max-width: 520px) {
+	.souss-ad {
+		max-width: 100%;
+	}
+	.souss-ad--floating {
+		left: 12px;
+		right: 12px;
+		max-width: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.souss-ad__inner {
+		transition: opacity 0.2s ease;
+		transform: none !important;
+	}
+	.souss-ad__inner.is-visible {
+		opacity: 1;
+	}
+}
