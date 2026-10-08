@@ -75,7 +75,7 @@ add_action( 'template_redirect', function () {
         echo "    <news:news>\n";
         echo "      <news:publication>\n";
         echo "        <news:name>Souss Actualités</news:name>\n";
-        echo "        <news:language>fr</news:language>\n";
+        echo "        <news:language>" . ( preg_match( '/\p{Arabic}/u', get_the_title( $post ) ) ? 'ar' : 'fr' ) . "</news:language>\n";
         echo "      </news:publication>\n";
         echo '      <news:publication_date>' . esc_html( $publication_date ) . "</news:publication_date>\n";
         echo '      <news:title>' . esc_html( get_the_title( $post ) ) . "</news:title>\n";
