@@ -37,9 +37,18 @@ fi
 # dossier wp-content/uploads-webpc/uploads doit exister avant cet appel : le plugin en a
 # besoin pour calculer la correspondance entre une image source et son fichier converti,
 # sinon le fichier regenere reste vide de toute correspondance (images toujours cassees).
+# wp-content/uploads-webpc lui-meme n'est pas non plus sur le volume persistant ; les
+# images converties (WebP/AVIF) qu'il contient disparaitraient donc aussi a chaque
+# redeploiement. On le remplace par un lien symbolique vers wp-content/uploads/.webpc,
+# qui lui est bien sur le volume, pour que les conversions survivent.
 if [ -d /var/www/html/wp-content/plugins/webp-converter-for-media ]; then
-  mkdir -p /var/www/html/wp-content/uploads-webpc/uploads || true
-  chmod -R 777 /var/www/html/wp-content/uploads-webpc || true
+  mkdir -p /var/www/html/wp-content/uploads/.webpc/uploads || true
+
+  rm -rf /var/www/html/wp-content/uploads-webpc || true
+  ln -s /var/www/html/wp-content/uploads/.webpc /var/www/html/wp-content/uploads-webpc || true
+
+  chmod -R 777 /var/www/html/wp-content/uploads/.webpc || true
+
   wp eval "do_action( 'webpc_refresh_loader', true );" --allow-root --path=/var/www/html || true
 fi
 
