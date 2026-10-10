@@ -30,6 +30,14 @@ if [ -d "$WPSC_DIR" ]; then
   fi
 fi
 
+# Converter for Media (mode Pass Thru) : wp-content/webpc-passthru.php n'est pas persistant
+# non plus (meme raison que ci-dessus) ; sans lui, les images du site tombent en 404 apres
+# un redeploiement. On rejoue le hook que le plugin utilise lui-meme pour (re)generer ce
+# fichier a partir des reglages deja enregistres (equivalent a reactiver le plugin).
+if [ -d /var/www/html/wp-content/plugins/webp-converter-for-media ]; then
+  wp eval "do_action( 'webpc_refresh_loader', true );" --allow-root --path=/var/www/html || true
+fi
+
 # Traductions francaises : wp-content/languages n'est pas sur le volume,
 # elles disparaissent a chaque deploiement. On les reinstalle en arriere-plan
 # (sans bloquer ni faire planter le demarrage si wordpress.org ne repond pas).
