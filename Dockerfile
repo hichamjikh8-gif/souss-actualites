@@ -10,6 +10,7 @@ COPY nginx.conf /etc/nginx/sites-available/default
 
 COPY wp-content/themes/extendable-child /var/www/html/wp-content/themes/extendable-child
 COPY wp-content/mu-plugins /var/www/html/wp-content/mu-plugins
+COPY wp-content/plugins /var/www/html/wp-content/plugins
 RUN mkdir -p /var/www/html/.well-known
 COPY .well-known/assetlinks.json /var/www/html/.well-known/assetlinks.json
 
