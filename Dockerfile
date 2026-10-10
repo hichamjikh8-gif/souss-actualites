@@ -23,7 +23,7 @@ COPY robots.txt /var/www/html/robots.txt
 # config nginx+php-fpm). Le bloc Sitemap pointe vers le sitemap Rank Math.
 COPY robots.txt /var/www/html/robots.txt
 
-# Telecharger le theme parent extendable et les 4 plugins depuis WordPress.org.
+# Telecharger le theme parent extendable et les 5 plugins depuis WordPress.org.
 # NB: "WP to Social Agency" (nextscripts-snap) est installe via WP-CLI au
 # demarrage du conteneur (voir /cleanup-wordfence.sh), car WP-CLI exige un
 # WordPress bootstrappe qui n'existe pas encore pendant le build.
@@ -44,7 +44,10 @@ RUN curl -L "https://downloads.wordpress.org/theme/extendable.latest-stable.zip"
     && rm /tmp/wsc.zip \
         && curl -L "https://downloads.wordpress.org/plugin/polylang.latest-stable.zip" -o /tmp/pll.zip \
             && unzip -q /tmp/pll.zip -d /var/www/html/wp-content/plugins/ \
-                && rm /tmp/pll.zip
+                && rm /tmp/pll.zip \
+    && curl -L "https://downloads.wordpress.org/plugin/webp-converter-for-media.latest-stable.zip" -o /tmp/cfm.zip \
+    && unzip -q /tmp/cfm.zip -d /var/www/html/wp-content/plugins/ \
+    && rm /tmp/cfm.zip
 
 COPY start.sh /start.sh
 COPY cleanup-wordfence.sh /cleanup-wordfence.sh
