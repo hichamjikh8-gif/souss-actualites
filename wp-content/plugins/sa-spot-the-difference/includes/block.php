@@ -40,14 +40,16 @@ function sgtd_register_block() {
 }
 
 /**
- * N'interroge la liste des jeux publiés que quand l'éditeur de blocs est réellement chargé
+ * N'interroge la liste des jeux que quand l'éditeur de blocs est réellement chargé
  * (pas sur le front, pas sur les autres écrans d'admin) — pas de nouvelle route REST publique nécessaire.
+ * Inclut les brouillons : un rédacteur doit pouvoir préparer un article avec un jeu pas encore publié
+ * et le prévisualiser (le rendu public, lui, reste réservé aux jeux publiés — voir sgtd_render_game_markup).
  */
 function sgtd_localize_block_editor_games() {
 	$games = get_posts(
 		array(
 			'post_type'      => 'sgtd_game',
-			'post_status'    => 'publish',
+			'post_status'    => array( 'publish', 'draft', 'pending', 'future' ),
 			'posts_per_page' => -1,
 			'orderby'        => 'title',
 			'order'          => 'ASC',
@@ -56,9 +58,13 @@ function sgtd_localize_block_editor_games() {
 
 	$choices = array();
 	foreach ( $games as $game ) {
+		$title = get_the_title( $game );
+		if ( 'publish' !== $game->post_status ) {
+			$title .= ' ' . __( '(brouillon)', 'sa-spot-the-difference' );
+		}
 		$choices[] = array(
 			'id'    => $game->ID,
-			'title' => get_the_title( $game ),
+			'title' => $title,
 		);
 	}
 

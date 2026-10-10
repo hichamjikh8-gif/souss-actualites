@@ -10,9 +10,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 function sgtd_render_game_markup( $game_id ) {
 	$game = $game_id ? get_post( $game_id ) : null;
 
-	if ( ! $game || 'sgtd_game' !== $game->post_type || 'publish' !== $game->post_status ) {
+	// Un visiteur anonyme ne voit jamais un jeu non publié ; un utilisateur connecté qui peut éditer
+	// du contenu peut prévisualiser un jeu encore en brouillon (même logique que l'aperçu d'un article).
+	$status_allowed = $game && ( 'publish' === $game->post_status || current_user_can( 'edit_posts' ) );
+
+	if ( ! $game || 'sgtd_game' !== $game->post_type || ! $status_allowed ) {
 		if ( current_user_can( 'edit_posts' ) ) {
-			return '<p class="sgtd-admin-notice">' . esc_html__( 'Choisissez un jeu "Trouvez les différences" publié dans le panneau du bloc.', 'sa-spot-the-difference' ) . '</p>';
+			return '<p class="sgtd-admin-notice">' . esc_html__( 'Choisissez un jeu "Trouvez les différences" dans le panneau du bloc.', 'sa-spot-the-difference' ) . '</p>';
 		}
 		return '';
 	}
