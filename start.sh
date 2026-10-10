@@ -33,8 +33,13 @@ fi
 # Converter for Media (mode Pass Thru) : wp-content/webpc-passthru.php n'est pas persistant
 # non plus (meme raison que ci-dessus) ; sans lui, les images du site tombent en 404 apres
 # un redeploiement. On rejoue le hook que le plugin utilise lui-meme pour (re)generer ce
-# fichier a partir des reglages deja enregistres (equivalent a reactiver le plugin).
+# fichier a partir des reglages deja enregistres (equivalent a reactiver le plugin). Le
+# dossier wp-content/uploads-webpc/uploads doit exister avant cet appel : le plugin en a
+# besoin pour calculer la correspondance entre une image source et son fichier converti,
+# sinon le fichier regenere reste vide de toute correspondance (images toujours cassees).
 if [ -d /var/www/html/wp-content/plugins/webp-converter-for-media ]; then
+  mkdir -p /var/www/html/wp-content/uploads-webpc/uploads || true
+  chmod -R 777 /var/www/html/wp-content/uploads-webpc || true
   wp eval "do_action( 'webpc_refresh_loader', true );" --allow-root --path=/var/www/html || true
 fi
 
