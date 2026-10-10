@@ -1,0 +1,74 @@
+.sgtd-image-pickers {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 24px;
+}
+
+.sgtd-image-picker {
+	flex: 1 1 260px;
+}
+
+.sgtd-image-preview img {
+	max-width: 100%;
+	height: auto;
+	border: 1px solid #dcdcde;
+	margin-bottom: 8px;
+}
+
+.sgtd-editor-wrap {
+	max-width: 900px;
+}
+
+.sgtd-editor-image {
+	position: relative;
+	display: inline-block;
+	max-width: 100%;
+	cursor: crosshair;
+	line-height: 0;
+}
+
+.sgtd-editor-img {
+	max-width: 100%;
+	height: auto;
+	display: block;
+	user-select: none;
+}
+
+.sgtd-marker-layer {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+.sgtd-marker {
+	position: absolute;
+	width: 26px;
+	height: 26px;
+	margin-left: -13px;
+	margin-top: -13px;
+	border-radius: 50%;
+	background: rgba(212, 0, 0, 0.85);
+	color: #fff;
+	font-size: 12px;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: auto;
+	cursor: pointer;
+	border: 2px solid #fff;
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+.sgtd-warning {
+	color: #a80000;
+	font-weight: 600;
+}
+
+.sgtd-feedback {
+	min-height: 1.4em;
+	color: #a80000;
+}
