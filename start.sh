@@ -3,12 +3,33 @@ set -e
 
 docker-entrypoint.sh php-fpm -D &
 
-until [ -f /var/www/html/index.php ]; do
+until [ -f /var/www/html/index.php ] && [ -f /var/www/html/wp-config.php ]; do
   sleep 1
   done
 
 mkdir -p /var/www/html/wp-content/uploads
 chmod -R 777 /var/www/html/wp-content/uploads
+
+# WP Super Cache : wp-content/advanced-cache.php, wp-content/wp-cache-config.php et la
+# constante WP_CACHE ne survivent pas a un redeploiement (seul wp-content/uploads est sur
+# un volume persistant Railway ; le reste de wp-content repart de l'image a chaque deploi).
+# On les regenere donc a chaque demarrage de conteneur, a partir des fichiers fournis par
+# le plugin wp-super-cache lui-meme (deja telecharge dans le Dockerfile).
+WPSC_DIR=/var/www/html/wp-content/plugins/wp-super-cache
+if [ -d "$WPSC_DIR" ]; then
+  mkdir -p /var/www/html/wp-content/cache || true
+  chmod -R 777 /var/www/html/wp-content/cache || true
+
+  cp -f "$WPSC_DIR/advanced-cache.php" /var/www/html/wp-content/advanced-cache.php || true
+
+  cp -f "$WPSC_DIR/wp-cache-config-sample.php" /var/www/html/wp-content/wp-cache-config.php || true
+  sed -i "s/\$cache_enabled = false;/\$cache_enabled = true;/" /var/www/html/wp-content/wp-cache-config.php || true
+
+  if ! grep -q "define( 'WP_CACHE'" /var/www/html/wp-config.php; then
+    sed -i "/require_once ABSPATH . 'wp-settings.php';/i define( 'WP_CACHE', true ); define( 'WPCACHEHOME', '$WPSC_DIR/' );" /var/www/html/wp-config.php || true
+  fi
+fi
+
 # Traductions francaises : wp-content/languages n'est pas sur le volume,
 # elles disparaissent a chaque deploiement. On les reinstalle en arriere-plan
 # (sans bloquer ni faire planter le demarrage si wordpress.org ne repond pas).
