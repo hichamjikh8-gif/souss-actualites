@@ -23,11 +23,15 @@ const X_ACCESS_TOKEN_SECRET = process.env.X_ACCESS_TOKEN_SECRET;
 
 const SEEN_FILE = path.join(__dirname, 'seen.json');
 
+// Retourne null si le fichier est absent ou illisible : seen.json vit dans le
+// conteneur du worker, qui n'a aucun volume Railway, donc il disparait a chaque
+// redeploiement. checkFeed() traite ce cas comme un premier lancement pour ne
+// pas renvoyer tout le flux (voir plus bas).
 function loadSeen() {
     try {
           return new Set(JSON.parse(fs.readFileSync(SEEN_FILE, 'utf8')));
     } catch (err) {
-          return new Set();
+          return null;
     }
 }
 
@@ -180,11 +184,26 @@ async function checkFeed() {
         return;
     }
 
-    const seen = loadSeen();
+    const storedSeen = loadSeen();
+    const isFirstRun = storedSeen === null;
+    const seen = storedSeen || new Set();
 
     try {
         const feed = await parser.parseURL(FEED_URL);
         const newItems = feed.items.filter((item) => item.link && !seen.has(item.link)).reverse();
+
+        // Premier lancement (seen.json absent : conteneur neuf ou redeploiement) :
+        // on marque tout le flux comme deja vu sans rien envoyer. Sinon chaque
+        // redeploiement repart d'un fichier vide et renvoie les memes articles a
+        // Telegram, Facebook et X.
+        if (isFirstRun) {
+            newItems.forEach((item) => seen.add(item.link));
+            saveSeen(seen);
+            if (newItems.length > 0) {
+                console.log(`Premier lancement (seen.json absent) : ${newItems.length} article(s) du flux marques deja vus, aucun envoi.`);
+            }
+            return;
+        }
 
         for (const item of newItems) {
             // Telegram

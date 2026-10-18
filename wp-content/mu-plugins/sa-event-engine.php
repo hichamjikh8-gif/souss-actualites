@@ -444,19 +444,20 @@ function sa_event_social_mark_published( $id ) {
 
 /**
  * Un canal est "configure" si ses identifiants existent. Determine si le
- * bouton "Publier maintenant" doit apparaitre pour ce canal - tant que
- * Hicham n'a pas ajoute les identifiants dans WORDPRESS_CONFIG_EXTRA, aucun
- * bouton n'apparait et rien ne peut partir automatiquement.
+ * bouton "Publier maintenant" doit apparaitre pour ce canal - tant que les
+ * identifiants ne sont pas poses (variable d'environnement Railway ou
+ * define() dans WORDPRESS_CONFIG_EXTRA), aucun bouton n'apparait et rien ne
+ * peut partir automatiquement.
  */
 function sa_event_social_channel_configured( $channel ) {
 	if ( 'facebook' === $channel ) {
 		return defined( 'FACEBOOK_PAGE_ID' ) && FACEBOOK_PAGE_ID !== '' && defined( 'FACEBOOK_PAGE_ACCESS_TOKEN' ) && FACEBOOK_PAGE_ACCESS_TOKEN !== '';
 	}
 	if ( 'x' === $channel ) {
-		return defined( 'X_CONSUMER_KEY' ) && X_CONSUMER_KEY !== ''
-			&& defined( 'X_CONSUMER_SECRET' ) && X_CONSUMER_SECRET !== ''
-			&& defined( 'X_ACCESS_TOKEN' ) && X_ACCESS_TOKEN !== ''
-			&& defined( 'X_ACCESS_TOKEN_SECRET' ) && X_ACCESS_TOKEN_SECRET !== '';
+		return null !== sa_event_secret( 'X_CONSUMER_KEY' )
+			&& null !== sa_event_secret( 'X_CONSUMER_SECRET' )
+			&& null !== sa_event_secret( 'X_ACCESS_TOKEN' )
+			&& null !== sa_event_secret( 'X_ACCESS_TOKEN_SECRET' );
 	}
 	return false; // telegram et newsletter restent volontairement manuels pour l'instant.
 }
@@ -479,12 +480,17 @@ function sa_event_oauth1_percent_encode( $str ) {
  * (section 1.2) le 2026-09-23.
  */
 function sa_event_build_oauth1_header( $method, $url ) {
+	$consumer_key        = (string) sa_event_secret( 'X_CONSUMER_KEY' );
+	$consumer_secret     = (string) sa_event_secret( 'X_CONSUMER_SECRET' );
+	$access_token        = (string) sa_event_secret( 'X_ACCESS_TOKEN' );
+	$access_token_secret = (string) sa_event_secret( 'X_ACCESS_TOKEN_SECRET' );
+
 	$oauth_params = array(
-		'oauth_consumer_key'     => X_CONSUMER_KEY,
+		'oauth_consumer_key'     => $consumer_key,
 		'oauth_nonce'            => wp_generate_password( 32, false ),
 		'oauth_signature_method' => 'HMAC-SHA1',
 		'oauth_timestamp'        => (string) time(),
-		'oauth_token'            => X_ACCESS_TOKEN,
+		'oauth_token'            => $access_token,
 		'oauth_version'          => '1.0',
 	);
 
@@ -496,7 +502,7 @@ function sa_event_build_oauth1_header( $method, $url ) {
 	$param_string = implode( '&', $pairs );
 
 	$base_string = strtoupper( $method ) . '&' . sa_event_oauth1_percent_encode( $url ) . '&' . sa_event_oauth1_percent_encode( $param_string );
-	$signing_key = sa_event_oauth1_percent_encode( X_CONSUMER_SECRET ) . '&' . sa_event_oauth1_percent_encode( X_ACCESS_TOKEN_SECRET );
+	$signing_key = sa_event_oauth1_percent_encode( $consumer_secret ) . '&' . sa_event_oauth1_percent_encode( $access_token_secret );
 	$signature   = base64_encode( hash_hmac( 'sha1', $base_string, $signing_key, true ) );
 
 	$header_params            = $oauth_params;
