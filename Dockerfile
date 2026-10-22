@@ -1,14 +1,13 @@
-FROM wordpress:php8.2-fpm
-
 # Patch de securite PHP ("PHP2Shell", CVE-2026-109618 / CVE-2026-109619) :
 # deux RCE non authentifiees (CVSS 9.2) corrigees dans PHP 8.2.35 le 21/10/2026.
-# Le tag flottant wordpress:php8.2-fpm contient deja 8.2.35, mais Railway peut
-# reutiliser une couche de base construite avant la sortie du patch : cet
-# upgrade explicite (deb.sury.org) force les paquets PHP corriges a chaque build.
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
-    && apt-get install -y nginx unzip \
-    && rm -rf /var/lib/apt/lists/*
+# L'image officielle compile PHP (elle ne passe pas par apt) : "apt-get upgrade"
+# ne corrige donc PAS PHP. On epingle le digest de wordpress:php8.2-fpm publie
+# apres le correctif, ce qui force le pull de la nouvelle couche de base meme si
+# Railway a encore l'ancienne en cache. Re-epingler (ou passer a 8.4) pour les
+# prochains patchs : le garde-fou ci-dessous fait echouer le build si besoin.
+FROM wordpress:php8.2-fpm@sha256:5eaa8d6476c800b71d6d6d1e4b26fac781b80a1204ac4d21488e0b61e3638443
+
+RUN apt-get update && apt-get install -y nginx unzip && rm -rf /var/lib/apt/lists/*
 
 # Filet de securite : le build echoue si le PHP embarque n'est pas corrige,
 # plutot que de deployer un PHP vulnerable en production.

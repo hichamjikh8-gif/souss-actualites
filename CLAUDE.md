@@ -90,7 +90,7 @@ Côté bot (`engine/lib/agent.js`), l'agent Claude dispose des outils `buscar_ev
 - Le webhook Telegram (`/telegram-webhook`) ignore toute commande venant d'un chat différent de `ADMIN_TELEGRAM_ID`.
 - Ne jamais mettre de secret dans ce fichier, dans un commit, un log ou un prompt système.
 - `external-monitor` peut redémarrer le service `souss-actualites` via l'API Railway — mais uniquement en lecture/redémarrage contrôlé, jamais en modification de code ou de base de données (principe affiché dans son propre README).
-- PHP : la base est `wordpress:php8.2-fpm`. Le build force le correctif via `apt-get upgrade` et **échoue** si `PHP_VERSION < 8.2.35` (`Dockerfile`), car les versions 8.2.x antérieures sont vulnérables aux RCE « PHP2Shell » (CVE-2026-109618 / CVE-2026-109619). Le durcissement temporaire (PHP2Shell) est dans `php-security.ini`. PHP 8.2 est en fin de support au 31/12/2026 → prévoir un passage à 8.4.
+- PHP : la base est l'image officielle `wordpress:php8.2-fpm`, où PHP est **compilé** (aucun paquet apt) : `apt-get upgrade` ne corrige donc **pas** PHP. Le `Dockerfile` **épingle le digest** de l'image publiée après un correctif de sécurité et **échoue** si `PHP_VERSION < 8.2.35`. Les versions 8.2.x antérieures sont vulnérables aux RCE « PHP2Shell » (CVE-2026-109618 / CVE-2026-109619). Durcissement : `php-security.ini` + `php_admin_value[memory_limit]=-1` dans le pool FPM. PHP 8.2 est en fin de support au 31/12/2026 → prévoir un passage à 8.4.
 
 ## Non-destruction
 
