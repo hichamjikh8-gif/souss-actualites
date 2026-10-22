@@ -1,6 +1,29 @@
 FROM wordpress:php8.2-fpm
 
-RUN apt-get update && apt-get install -y nginx unzip && rm -rf /var/lib/apt/lists/*
+# Patch de securite PHP ("PHP2Shell", CVE-2026-109618 / CVE-2026-109619) :
+# deux RCE non authentifiees (CVSS 9.2) corrigees dans PHP 8.2.35 le 21/10/2026.
+# Le tag flottant wordpress:php8.2-fpm contient deja 8.2.35, mais Railway peut
+# reutiliser une couche de base construite avant la sortie du patch : cet
+# upgrade explicite (deb.sury.org) force les paquets PHP corriges a chaque build.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && apt-get install -y nginx unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Filet de securite : le build echoue si le PHP embarque n'est pas corrige,
+# plutot que de deployer un PHP vulnerable en production.
+RUN php -r "if (!version_compare(PHP_VERSION, '8.2.35', '>=')) { fwrite(STDERR, 'PHP ' . PHP_VERSION . ' vulnerable : 8.2.35 minimum requis'.PHP_EOL); exit(1); }"
+
+COPY php-security.ini /usr/local/etc/php/conf.d/zz-sa-security.ini
+
+# Mitigations temporaires PHP2Shell : le pool FPM (requetes web) tourne sans
+# limite de memoire, ce qui supprime la condition OOM controlable de
+# CVE-2026-109618. WordPress ne peut pas relever une limite deja a -1 et
+# aucun plugin ne peut la modifier (php_admin_value). WP-CLI garde la limite
+# par defaut : les conversions WebP lancees au demarrage du conteneur ne
+# doivent pas pouvoir vider sa memoire.
+RUN ls /usr/local/etc/php-fpm.d/*.conf > /dev/null \
+    && for f in /usr/local/etc/php-fpm.d/*.conf; do printf '\nphp_admin_value[memory_limit] = -1\n' >> "$f"; done
 
 # WP-CLI is required by cleanup-wordfence.sh to run database maintenance queries
 RUN curl -L "https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar" -o /usr/local/bin/wp \
