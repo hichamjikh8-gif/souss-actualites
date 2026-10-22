@@ -22,6 +22,7 @@ COPY robots.txt /var/www/html/robots.txt
 # le 404 actuel (WP sert souvent un robots.txt virtuel, mais pas dans cette
 # config nginx+php-fpm). Le bloc Sitemap pointe vers le sitemap Rank Math.
 COPY robots.txt /var/www/html/robots.txt
+ENV PLUGINS_REFRESH=2026-10-22
 
 # Telecharger le theme parent extendable et les 5 plugins depuis WordPress.org.
 # NB: "WP to Social Agency" (nextscripts-snap) est installe via WP-CLI au
