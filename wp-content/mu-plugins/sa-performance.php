@@ -46,3 +46,13 @@ add_filter( 'wp_theme_json_data_user', function ( $theme_json ) {
 	sa_perf_strip_dead_logo_css( $data, $changed );
 	return $changed ? new WP_Theme_JSON_Data( $data, 'custom' ) : $theme_json;
 } );
+
+// Dans un theme de blocs, le « CSS additionnel » du Customizer est ajoute au meme bloc
+// global-styles-inline-css : c'est la que se trouve cette regle sur le site en ligne.
+add_filter( 'wp_get_custom_css', function ( $css ) {
+	if ( ! is_string( $css ) || false === strpos( $css, 'data:image/' ) ) {
+		return $css;
+	}
+	$clean = preg_replace( '~background-image\s*:\s*url\(\s*[\'"]?data:image/[^)]*\)\s*;?~i', '', $css );
+	return is_string( $clean ) ? $clean : $css;
+} );
