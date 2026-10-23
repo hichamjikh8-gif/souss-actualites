@@ -141,7 +141,7 @@ canvas{display:block;width:100%;height:100%}
   </div>
   <button class="skip" id="skip" type="button">Passer</button>
   <div class="start" id="start" hidden><button type="button" id="startBtn" class="replay">Entrer</button></div>
-  <div class="brand" id="brand" aria-hidden="true">
+  <div class="brand show" id="brand" aria-hidden="true">
     <div class="logo">
       <img id="logoImg" alt="Souss Actualités" width="720" height="388">
       <div class="f">Fondé par feu Lahcen Jikh · depuis 1971</div>
@@ -846,6 +846,7 @@ document.getElementById('startBtn').onclick=()=>{initSound();if(ac)ac.resume();s
 document.getElementById('start').hidden=true;document.getElementById('startBtn').onclick();
 ['pointerdown','touchstart','touchend','click','keydown'].forEach(ev=>document.addEventListener(ev,()=>{if(ac)ac.resume();},true));
 still();renderer.render(scene,camera);
+try{if(window.parent!==window)window.parent.postMessage({souss:'splash-start'},'*');}catch(e){}
 if(document.fonts&&document.fonts.load){Promise.race([document.fonts.load('92px "Archivo Black"'),new Promise(r=>setTimeout(r,2500))]).then(()=>{nameTex._redraw();pressTex._redraw();}).catch(()=>{});}
 })();
 </script>

@@ -17,7 +17,7 @@ add_action( 'wp_head', function () {
 	if ( is_admin() || wp_doing_ajax() ) {
 		return;
 	}
-	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=2';
+	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=3';
 	?>
 <script>
 (function () {
@@ -49,8 +49,10 @@ add_action( 'wp_head', function () {
 			if (e.origin !== location.origin || !e.data) { return; }
 			if (e.data.souss === 'splash-reveal') { f.style.setProperty('background', 'transparent', 'important'); }
 			if (e.data.souss === 'splash-done') { done(); }
+			// The 3D scene takes a few seconds to build; the full film lasts about 20 s once it starts.
+			if (e.data.souss === 'splash-start') { clearTimeout(guard); setTimeout(done, 26000); }
 		});
-		setTimeout(done, 24000);
+		var guard = setTimeout(done, 20000);
 		document.documentElement.appendChild(f);
 	} catch (e) {}
 })();
