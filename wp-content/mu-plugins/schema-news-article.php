@@ -47,6 +47,7 @@ add_action( 'wp_head', function () {
             '@id'   => $permalink,
         ),
         'url' => $permalink,
+        'inLanguage' => preg_match( '/\p{Arabic}/u', $title ) ? 'ar-MA' : 'fr-MA',
     );
 
     if ( $image_url ) {
