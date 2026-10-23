@@ -25,6 +25,12 @@ if [ -d "$WPSC_DIR" ]; then
   cp -f "$WPSC_DIR/wp-cache-config-sample.php" /var/www/html/wp-content/wp-cache-config.php || true
   sed -i "s/\$cache_enabled = false;/\$cache_enabled = true;/" /var/www/html/wp-content/wp-cache-config.php || true
 
+  # Sans cette constante, WP Super Cache envoie max-age=3 + no-cache : le navigateur
+  # redemande chaque page a chaque visite. 60 s reste court pour l'actualite.
+  if ! grep -q "WPSC_CACHE_CONTROL_HEADER" /var/www/html/wp-config.php; then
+    sed -i "/require_once ABSPATH . 'wp-settings.php';/i define( 'WPSC_CACHE_CONTROL_HEADER', 'max-age=60, must-revalidate' );" /var/www/html/wp-config.php || true
+  fi
+
   if ! grep -q "define( 'WP_CACHE'" /var/www/html/wp-config.php; then
     sed -i "/require_once ABSPATH . 'wp-settings.php';/i define( 'WP_CACHE', true ); define( 'WPCACHEHOME', '$WPSC_DIR/' );" /var/www/html/wp-config.php || true
   fi
@@ -49,8 +55,24 @@ if [ -d /var/www/html/wp-content/plugins/webp-converter-for-media ]; then
 
   chmod -R 777 /var/www/html/wp-content/uploads/.webpc || true
 
+  # Mode "htaccess" : le plugin garde les URLs d'images d'origine, que nginx sert
+  # ensuite en WebP statique (voir nginx.conf), au lieu du mode Pass Thru qui faisait
+  # passer chaque image par PHP sans cache navigateur.
+  wp eval '
+    $s = get_option( "webpc_settings", array() );
+    if ( ! is_array( $s ) ) { $s = array(); }
+    if ( ! isset( $s["loader_type"] ) || "htaccess" !== $s["loader_type"] ) {
+      $s["loader_type"] = "htaccess";
+      update_option( "webpc_settings", $s );
+    }
+  ' --allow-root --path=/var/www/html || true
+
   wp eval "do_action( 'webpc_refresh_loader', true );" --allow-root --path=/var/www/html || true
 fi
+
+# Les pages en cache peuvent encore pointer vers webpc-passthru.php : on vide le cache
+# HTML a chaque demarrage (il se reconstruit tout seul a la premiere visite).
+wp eval 'if ( function_exists( "wp_cache_clear_cache" ) ) { wp_cache_clear_cache(); }' --allow-root --path=/var/www/html || true
 
 # Traductions francaises : wp-content/languages n'est pas sur le volume,
 # elles disparaissent a chaque deploiement. On les reinstalle en arriere-plan

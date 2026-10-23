@@ -13,6 +13,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+/**
+ * Une ancienne version de l'ouverture est restee dans le pied de page enregistre en base
+ * (Site Editor). Dans l'application elle se lancait en meme temps que celle-ci (carte
+ * blanche puis ecran noir), et elle faisait telecharger a tous les visiteurs un logo de
+ * 412 Ko jamais affiche. On la retire au rendu, sans modifier le contenu enregistre.
+ */
+add_filter( 'render_block', function ( $content ) {
+	if ( ! is_string( $content ) ) {
+		return $content;
+	}
+	$start = strpos( $content, '<style id="sa-splash-css"' );
+	if ( false === $start ) {
+		return $content;
+	}
+	$loader = strpos( $content, 'id="sa-splash-loader"', $start );
+	$end    = false === $loader ? false : strpos( $content, '</script>', $loader );
+	if ( false === $end ) {
+		return $content;
+	}
+	return substr( $content, 0, $start ) . substr( $content, $end + strlen( '</script>' ) );
+}, 20 );
+
 add_action( 'wp_head', function () {
 	if ( is_admin() || wp_doing_ajax() ) {
 		return;
