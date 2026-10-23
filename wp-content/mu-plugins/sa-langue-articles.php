@@ -55,3 +55,9 @@ add_filter( 'rank_math/json_ld', function ( $data ) {
 	}
 	return $data;
 }, PHP_INT_MAX ); // Rank Math complete l'article apres la priorite 99 : on passe en dernier.
+
+// Rank Math ajoute la langue de l'article (NewsArticle, images) apres le filtre json_ld,
+// via ce filtre dedie.
+add_filter( 'rank_math/schema/language', function ( $language ) {
+	return sa_lang_current_is_arabic() ? 'ar-MA' : $language;
+}, 20 );
