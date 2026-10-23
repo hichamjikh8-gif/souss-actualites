@@ -17,7 +17,7 @@ add_action( 'wp_head', function () {
 	if ( is_admin() || wp_doing_ajax() ) {
 		return;
 	}
-	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=1';
+	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=2';
 	?>
 <script>
 (function () {
@@ -36,7 +36,9 @@ add_action( 'wp_head', function () {
 		f.src = <?php echo wp_json_encode( esc_url_raw( $src ) ); ?>;
 		f.title = 'Souss Actualités';
 		f.setAttribute('aria-hidden', 'true');
-		f.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:0;margin:0;padding:0;z-index:2147483647;background:#0c0f14';
+		// The theme sizes iframes; force a full-screen overlay.
+		var css = { position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', width: '100vw', height: '100vh', 'max-width': 'none', 'max-height': 'none', 'min-height': '100vh', 'aspect-ratio': 'auto', border: '0', margin: '0', padding: '0', 'z-index': '2147483647', background: '#0c0f14', display: 'block' };
+		for (var k in css) { f.style.setProperty(k, css[k], 'important'); }
 		var removed = false;
 		function done() {
 			if (removed) { return; }
@@ -45,7 +47,7 @@ add_action( 'wp_head', function () {
 		}
 		window.addEventListener('message', function (e) {
 			if (e.origin !== location.origin || !e.data) { return; }
-			if (e.data.souss === 'splash-reveal') { f.style.background = 'transparent'; }
+			if (e.data.souss === 'splash-reveal') { f.style.setProperty('background', 'transparent', 'important'); }
 			if (e.data.souss === 'splash-done') { done(); }
 		});
 		setTimeout(done, 24000);
