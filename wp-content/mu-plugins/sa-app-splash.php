@@ -17,7 +17,7 @@ add_action( 'wp_head', function () {
 	if ( is_admin() || wp_doing_ajax() ) {
 		return;
 	}
-	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=3';
+	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=4';
 	?>
 <script>
 (function () {
@@ -37,7 +37,7 @@ add_action( 'wp_head', function () {
 		f.title = 'Souss Actualités';
 		f.setAttribute('aria-hidden', 'true');
 		// The theme sizes iframes; force a full-screen overlay.
-		var css = { position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', width: '100vw', height: '100vh', 'max-width': 'none', 'max-height': 'none', 'min-height': '100vh', 'aspect-ratio': 'auto', border: '0', margin: '0', padding: '0', 'z-index': '2147483647', background: '#0c0f14', display: 'block' };
+		var css = { position: 'fixed', top: '0', left: '0', right: '0', bottom: '0', width: '100vw', height: '100vh', 'max-width': 'none', 'max-height': 'none', 'min-height': '100vh', 'aspect-ratio': 'auto', border: '0', margin: '0', padding: '0', 'z-index': '2147483647', background: '#000', display: 'block', 'color-scheme': 'light only' };
 		for (var k in css) { f.style.setProperty(k, css[k], 'important'); }
 		var removed = false;
 		function done() {
