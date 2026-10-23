@@ -54,4 +54,4 @@ add_filter( 'rank_math/json_ld', function ( $data ) {
 		}
 	}
 	return $data;
-}, 99 );
+}, PHP_INT_MAX ); // Rank Math complete l'article apres la priorite 99 : on passe en dernier.
