@@ -70,7 +70,10 @@ RUN curl -L "https://downloads.wordpress.org/theme/extendable.latest-stable.zip"
                 && rm /tmp/pll.zip \
     && curl -L "https://downloads.wordpress.org/plugin/webp-converter-for-media.latest-stable.zip" -o /tmp/cfm.zip \
     && unzip -q /tmp/cfm.zip -d /var/www/html/wp-content/plugins/ \
-    && rm /tmp/cfm.zip
+    && rm /tmp/cfm.zip \
+    && curl -L "https://downloads.wordpress.org/plugin/fast-indexing-api.latest-stable.zip" -o /tmp/fia.zip \
+    && unzip -q /tmp/fia.zip -d /var/www/html/wp-content/plugins/ \
+    && rm /tmp/fia.zip
 
 COPY start.sh /start.sh
 COPY cleanup-wordfence.sh /cleanup-wordfence.sh
