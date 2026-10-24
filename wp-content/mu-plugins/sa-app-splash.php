@@ -39,7 +39,7 @@ add_action( 'wp_head', function () {
 	if ( is_admin() || wp_doing_ajax() ) {
 		return;
 	}
-	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=4';
+	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=5';
 	?>
 <script>
 (function () {
