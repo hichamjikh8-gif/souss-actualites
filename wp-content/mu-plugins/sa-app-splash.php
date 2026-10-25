@@ -39,7 +39,8 @@ add_action( 'wp_head', function () {
 	if ( is_admin() || wp_doing_ajax() ) {
 		return;
 	}
-	$src = get_stylesheet_directory_uri() . '/assets/splash/index.html?v=5';
+	// Film de 9 s (helicoptere SOUSS ACTUALITES sur Agadir). L'ancienne animation 3D reste dans index.html.
+	$src = get_stylesheet_directory_uri() . '/assets/splash/video.html?v=6';
 	?>
 <script>
 (function () {
@@ -71,8 +72,8 @@ add_action( 'wp_head', function () {
 			if (e.origin !== location.origin || !e.data) { return; }
 			if (e.data.souss === 'splash-reveal') { f.style.setProperty('background', 'transparent', 'important'); }
 			if (e.data.souss === 'splash-done') { done(); }
-			// The 3D scene takes a few seconds to build; the full film lasts about 20 s once it starts.
-			if (e.data.souss === 'splash-start') { clearTimeout(guard); setTimeout(done, 26000); }
+			// The film lasts 9 s once it starts playing; the extra margin covers a slow phone.
+			if (e.data.souss === 'splash-start') { clearTimeout(guard); setTimeout(done, 14000); }
 		});
 		var guard = setTimeout(done, 20000);
 		document.documentElement.appendChild(f);

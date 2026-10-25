@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Souss Actualités</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #film { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; transition: opacity .5s ease; }
+  #film.out { opacity: 0; }
+  .btn { position: fixed; z-index: 2; border: 0; border-radius: 999px; padding: 10px 16px; font: 600 15px/1 system-ui, sans-serif; color: #fff; background: rgba(0, 0, 0, .55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); cursor: pointer; }
+  #sound { left: 16px; bottom: calc(24px + env(safe-area-inset-bottom)); display: none; }
+  #skip { right: 16px; bottom: calc(24px + env(safe-area-inset-bottom)); }
+</style>
+</head>
+<body>
+<video id="film" playsinline preload="auto"
+  src="https://d2ol7oe51mr4n9.cloudfront.net/user_3LCdkAhIwSRrWprhjeFFfSONXjJ/bb024a23-e132-43c1-847b-07d1b28ff184.mp4"></video>
+<button id="sound" class="btn" type="button">🔊 Son</button>
+<button id="skip" class="btn" type="button">Passer ›</button>
+<script>
+(function () {
+  var v = document.getElementById('film');
+  var sound = document.getElementById('sound');
+  var skip = document.getElementById('skip');
+  var finished = false;
+
+  function tell(msg) {
+    try { parent.postMessage({ souss: msg }, location.origin); } catch (e) {}
+  }
+
+  // When the film ends the parent removes this overlay and the newspaper's home page is already underneath.
+  function finish() {
+    if (finished) { return; }
+    finished = true;
+    v.classList.add('out');
+    tell('splash-reveal');
+    setTimeout(function () { tell('splash-done'); }, 500);
+  }
+
+  v.addEventListener('playing', function () { tell('splash-start'); }, { once: true });
+  v.addEventListener('ended', finish);
+  v.addEventListener('error', finish);
+  skip.addEventListener('click', finish);
+
+  // Browsers often refuse to start a video with sound on their own: then it starts muted and a tap turns the sound on.
+  function unmute() {
+    v.muted = false;
+    sound.style.display = 'none';
+  }
+  sound.addEventListener('click', function (e) { e.stopPropagation(); unmute(); });
+  document.addEventListener('click', function (e) { if (e.target !== skip && v.muted) { unmute(); } });
+
+  v.muted = false;
+  var p = v.play();
+  if (p && p.catch) {
+    p.catch(function () {
+      v.muted = true;
+      sound.style.display = 'block';
+      v.play().catch(finish);
+    });
+  }
+})();
+</script>
+</body>
+</html>
