@@ -78,7 +78,7 @@ add_action( 'template_redirect', function () {
         echo "        <news:language>" . ( preg_match( '/\p{Arabic}/u', get_the_title( $post ) ) ? 'ar' : 'fr' ) . "</news:language>\n";
         echo "      </news:publication>\n";
         echo '      <news:publication_date>' . esc_html( $publication_date ) . "</news:publication_date>\n";
-        echo '      <news:title>' . esc_html( get_the_title( $post ) ) . "</news:title>\n";
+        echo '      <news:title>' . esc_xml( html_entity_decode( get_the_title( $post ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) . "</news:title>\n";
         echo "    </news:news>\n";
         echo "  </url>\n";
     }
