@@ -1,0 +1,7 @@
+#ssond-rows{display:grid;gap:10px;margin:12px 0}
+.ssond-row{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid #dcdcde;border-radius:8px;background:#fff}
+.ssond-thumb{flex:0 0 64px;height:64px;border-radius:50%;background:#f0f0f1 center/cover no-repeat;display:grid;place-items:center;cursor:pointer;color:#8c8f94;border:2px solid #d6af55}
+.ssond-fields{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ssond-fields input[type=text]{flex:1 1 100%;font-size:15px;padding:6px 10px}
+.ssond-remove{border:0;background:none;font-size:24px;line-height:1;color:#b32d2e;cursor:pointer;padding:4px 8px}
+.ssond-unpick{color:#b32d2e}
