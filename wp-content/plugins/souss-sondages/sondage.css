@@ -50,3 +50,5 @@ position:relative;margin:28px 0 34px;padding:22px 20px 16px;border-radius:18px;b
 .ssond__toast.is-on{opacity:1;transform:translate(-50%,0)}
 @media (max-width:520px){.ssond{padding:20px 14px 14px;border-radius:16px;margin:22px 0 28px}.ssond--media .ssond__list{gap:10px}.ssond__label{font-size:14.5px}.ssond--media .ssond__body{padding:9px 10px 11px}}
 @media (prefers-reduced-motion:reduce){.ssond *{transition:none!important;animation:none!important}}
+.ssond--text .ssond__check{top:50%;right:12px;margin-top:-12px}
+.ssond--text.is-results .ssond__opt.is-mine .ssond__btn{padding-right:46px}

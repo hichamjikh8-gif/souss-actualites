@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Souss Sondages
  * Description: Sondages premium pour Souss Actualités : options avec photos, résultats animés, anti double vote, partage social. Affichage automatique sous la photo et le titre de l'article.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Souss Actualités
  * Text Domain: souss-sondages
  */
@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SSOND_VERSION', '1.0.0' );
+define( 'SSOND_VERSION', '1.0.1' );
 define( 'SSOND_URL', plugin_dir_url( __FILE__ ) );
 define( 'SSOND_TABLE', 'ssond_votes' );
 
@@ -352,7 +352,12 @@ function ssond_auto_insert( $content ) {
 	if ( ! $poll_id || false !== strpos( $content, 'class="ssond ' ) ) {
 		return $content;
 	}
-	return ssond_render( $poll_id, get_permalink() ) . $content;
+	$html = ssond_render( $poll_id, get_permalink() );
+	// Si l'article commence par sa photo (bloc image), le sondage se place juste après celle-ci.
+	if ( preg_match( '/^\s*<figure\b[^>]*wp-block-image[^>]*>.*?<\/figure>/is', $content, $m ) ) {
+		return $m[0] . $html . substr( $content, strlen( $m[0] ) );
+	}
+	return $html . $content;
 }
 
 /* -------------------------------------------------------------------------
