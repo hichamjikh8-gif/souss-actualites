@@ -3,8 +3,9 @@
  * Plugin Name: Souss Actualites - Ouverture de l'application
  * Description: Affiche l'animation d'ouverture (helicoptere PRESS + caisse en
  *              parachute) quand le site est ouvert depuis l'application Android
- *              ou l'icone installee sur l'ecran d'accueil. Les visiteurs venus
- *              de Google ou d'un navigateur ne la voient jamais.
+ *              ou l'icone installee sur l'ecran d'accueil. Depuis le 11/11/2026 elle est aussi montree une fois
+ *              par visiteur sur la page d'accueil du site. Les visiteurs venus
+ *              de Google sur un article ne la voient jamais.
  * Version:     1.0.0
  * Author:      Souss Actualites
  */
@@ -50,11 +51,23 @@ add_action( 'wp_head', function () {
 		var fromApp = document.referrer.indexOf('android-app://com.soussactualites.app') === 0;
 		var standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
 		var forced = /[?&]app=1(&|$)/.test(location.search);
-		if (!(fromApp || standalone || forced)) { return; }
-		try {
-			if (sessionStorage.getItem('saSplashSeen')) { return; }
-			sessionStorage.setItem('saSplashSeen', '1');
-		} catch (e) {}
+		// 2026-11-11 : demande du redacteur en chef - l'ouverture est aussi montree aux
+		// visiteurs du navigateur, mais seulement sur la page d'accueil et une seule fois
+		// par visiteur (jamais sur les articles venus de Google, jamais aux robots).
+		var isHome = <?php echo ( is_front_page() || is_home() ) ? 'true' : 'false'; ?>;
+		var isBot = navigator.webdriver || /bot|crawl|spider|slurp|lighthouse|headless|preview/i.test(navigator.userAgent || '');
+		if (fromApp || standalone || forced) {
+			try {
+				if (sessionStorage.getItem('saSplashSeen')) { return; }
+				sessionStorage.setItem('saSplashSeen', '1');
+			} catch (e) {}
+		} else {
+			if (!isHome || isBot) { return; }
+			try {
+				if (localStorage.getItem('saSplashSeenWeb')) { return; }
+				localStorage.setItem('saSplashSeenWeb', '1');
+			} catch (e) { return; }
+		}
 		var f = document.createElement('iframe');
 		f.src = <?php echo wp_json_encode( esc_url_raw( $src ) ); ?>;
 		f.title = 'Souss Actualités';
