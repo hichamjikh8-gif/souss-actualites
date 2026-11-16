@@ -255,10 +255,10 @@ async function tgPage(){const r=await fetch("/wp-admin/options-general.php?page=
 async function tgStatus(){try{const h=await tgPage();const bot=(h.match(/Bot : <strong>([^<]+)</)||[])[1]||"";const linked=/relié ✅/.test(h);const code=(h.match(/\/start ([A-Z0-9]+)/)||[])[1]||"";
   if(bot&&bot!="non connecté"){$("sas-tgbox").style.display="none";$("sas-tgst").innerHTML="— "+bot+(linked?" · téléphone relié ✅":" · envoyez au bot : <b>/start "+code+"</b>")}}catch(e){}}
 $("sas-tgsave").onclick=async()=>{const tok=$("sas-tgtok").value.trim();if(!tok)return alert("Collez la clé du bot.");
-  try{const h=await tgPage();const nonce=(h.match(/name="_wpnonce" value="([^"]+)"/)||[])[1];if(!nonce)throw new Error("connectez-vous à WordPress");
+  try{const h=await tgPage();const doc=new DOMParser().parseFromString(h,"text/html");const f0=doc.querySelector('input[name="sst_bot_token"]');const frm=f0&&f0.closest("form");const nonce=frm&&frm.querySelector('input[name="_wpnonce"]')?frm.querySelector('input[name="_wpnonce"]').value:"";if(!nonce)throw new Error("connectez-vous à WordPress");
   const fd=new FormData();fd.append("_wpnonce",nonce);fd.append("_wp_http_referer","/wp-admin/options-general.php?page=sst-telegram");fd.append("sst_bot_token",tok);fd.append("sst_github_token",TOKEN||"");fd.append("sst_save","1");
   const r=await fetch("/wp-admin/options-general.php?page=sst-telegram",{method:"POST",body:fd,credentials:"include"});const out=await r.text();
-  $("sas-tgtok").value="";if(/✅ Enregistré/.test(out)){await tgStatus()}else{alert("La clé du bot ne marche pas. Vérifiez-la dans BotFather.")}}catch(e){alert("Erreur : "+e.message)}};
+  $("sas-tgtok").value="";if(/✅ Enregistré/.test(out)){await tgStatus();$("sas-tgst").innerHTML+=" — ✅ connecté"}else if(/⚠️ Enregistré/.test(out)){alert("Telegram refuse cette clé. Copiez-la à nouveau depuis BotFather (sans espace).")}else{alert("Échec de l’enregistrement ("+r.status+"). Rechargez la page et réessayez.")}}catch(e){alert("Erreur : "+e.message)}};
 tgStatus();
 $("sas-reload").onclick=e=>{e.preventDefault();hist()};
 hist();
