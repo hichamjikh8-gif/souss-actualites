@@ -20,6 +20,7 @@ def log(*a):
 # ------------------------------------------------------------------ 1. article
 def clean(t):
     t = html.unescape(re.sub(r"<[^>]+>", " ", t))
+    t = re.sub(r"\s+([,.])", r"\1", t)
     t = re.sub(r"[ \t ]+", " ", t)
     return t
 
@@ -71,8 +72,15 @@ else:
 if CFG.get("title"):
     TITLE = CFG["title"]
 TITLE = TITLE.strip().rstrip(".…").strip()
-if TITLE.isupper():
+_letters = [c for c in TITLE if c.isalpha()]
+if _letters and sum(c.isupper() for c in _letters) / len(_letters) > 0.7:
     TITLE = TITLE[0] + TITLE[1:].lower()
+    PROPER = ["Maroc", "Afrique", "Agadir", "Souss", "Massa", "Atlas", "Lions", "Fifa", "Caf", "Rabat", "Casablanca",
+              "Marrakech", "Tanger", "Fès", "Taroudant", "Tiznit", "Inezgane", "Aït", "Melloul", "Chtouka", "Tata", "Essaouira",
+              "Taghazout", "Oufella", "Hassania", "Brésil", "Portugal", "Espagne", "France", "Europe", "Mohammed", "Royaume",
+              "Akhannouch", "Sahara", "Dakhla", "Laâyoune", "Guelmim", "Ouarzazate", "Qatar"]
+    for w in PROPER:
+        TITLE = re.sub(r"\b" + w.lower() + r"\b", w, TITLE)
 BYLINE = CFG.get("byline") or "Hicham Jikh Cheddad"
 log("Titre:", TITLE, "| paragraphes:", len(PARAS), "| images article:", len(ARTICLE_IMGS))
 
@@ -132,7 +140,7 @@ LINES = [TITLE + "."] + [l for l in LINES if l.strip() and l.strip().rstrip(".�
 from num2words import num2words
 FIX = {
     r"\bMohammed VI\b": "Mohamède six", r"\bMohammed V\b": "Mohamède cinq", r"\bHassan II\b": "Hassane deux",
-    r"\bMohammed\b": "Mohamède", r"\bMohamed\b": "Mohamède", r"\bFIFA\b": "Fifa", r"\bCAF\b": "Caf",
+    r"\bMohammed\b": "Mohamède", r"\bMohamed\b": "Mohamède", r"\bFIFA\b": "Fifa", r"\b[Ff]ootball": "foutbol", r"\b[Ff]ootballeur": "foutboleur", r"\bCAF\b": "Caf",
     r"\bCAN\b": "la Can", r"\bONU\b": "O N U", r"\bMMDH\b": "milliards de dirhams", r"\bMDH\b": "millions de dirhams", r"\bMAD\b": "dirhams", r"\bDH\b": "dirhams", r"\bdhs?\b": "dirhams",
     r"\bkm\b": "kilomètres", r"\bM€": "millions d'euros", r"%": " pour cent", r"\bSouss-Massa\b": "Souss Massa",
     r"\bAït\b": "Aït", r"\bOufella\b": "Oufella", r"\bGadiris\b": "Gadiris",
@@ -254,6 +262,7 @@ def commons_cat(cat, limit):
         log("Commons erreur", e); return []
     out = []
     for pg in (r.get("query") or {}).get("pages", {}).values():
+        if not pg.get("imageinfo"): continue
         ii = pg["imageinfo"][0]; md = ii.get("extmetadata", {})
         lic = md.get("LicenseShortName", {}).get("value", "")
         desc = (pg["title"] + " " + re.sub(r"<[^>]+>", " ", md.get("ImageDescription", {}).get("value", ""))).lower()
