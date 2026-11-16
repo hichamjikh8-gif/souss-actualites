@@ -159,7 +159,7 @@ else:
             if not ss: continue
             take = ss[:2] if i < 2 else ss[:1]
             for s in take:
-                if words > int(CFG.get("words", 70 if AR else 150)): break
+                if words > int(CFG.get("words", 120 if AR else 150)): break
                 if len(s.split()) < 4 and i > 0: continue
                 LINES.append(s); words += len(s.split())
         log("Résumé extractif:", words, "mots")
@@ -199,15 +199,30 @@ import numpy as np, soundfile as sf
 KD = os.environ.get("KOKORO_DIR", str(HERE / "models"))
 speed = float(CFG.get("vitesse", 1.05))
 if AR:
-    import wave, io
-    from piper import PiperVoice
-    from piper.config import SynthesisConfig
-    pv = PiperVoice.load(f"{KD}/ar_JO-kareem-medium.onnx")
-    def say(txt):
+    import wave, io, asyncio, tempfile
+    AR_VOICE = CFG.get("voix_ar", "ar-SA-HamedNeural")
+    pv = None
+    def say_piper(txt):
+        global pv
+        from piper import PiperVoice
+        from piper.config import SynthesisConfig
+        if pv is None: pv = PiperVoice.load(f"{KD}/ar_JO-kareem-medium.onnx")
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
-            pv.synthesize_wav(txt, wf, syn_config=SynthesisConfig(length_scale=0.88 / speed))
-        buf.seek(0); a, r = sf.read(buf, dtype="float32"); return a, r
+            pv.synthesize_wav(txt, wf, syn_config=SynthesisConfig(length_scale=0.85 / speed))
+        buf.seek(0); return sf.read(buf, dtype="float32")
+    def say(txt):
+        """Voix neuronale arabe (naturelle). Repli automatique sur Piper si indisponible."""
+        try:
+            import edge_tts
+            mp3 = tempfile.mktemp(suffix=".mp3"); wav = mp3[:-4] + ".wav"
+            rate = f"+{int(round((speed - 1) * 100)) + 5}%"
+            asyncio.run(edge_tts.Communicate(txt, AR_VOICE, rate=rate).save(mp3))
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", mp3, "-ac", "1", "-ar", "24000", wav], check=True)
+            return sf.read(wav, dtype="float32")
+        except Exception as e:
+            log("Voix neuronale indisponible, repli Piper:", e)
+            return say_piper(txt)
 else:
     from kokoro_onnx import Kokoro
     kok = Kokoro(f"{KD}/kokoro-v1.0.onnx", f"{KD}/voices-v1.0.bin")

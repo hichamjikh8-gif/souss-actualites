@@ -8,3 +8,4 @@ num2words
 piper-tts==1.8.0
 arabic-reshaper
 python-bidi
+edge-tts

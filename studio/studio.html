@@ -52,7 +52,8 @@
   </div>
   <div class="row">
     <div><label>Format</label><select id="sas-mode"><option value="resume">Résumé (≈ 1 minute)</option><option value="complet">Article complet</option></select></div>
-    <div><label>Langue de la voix</label><select id="sas-lang"><option value="auto">Automatique</option><option value="fr">Français</option><option value="ar">العربية (arabe)</option></select></div>
+    <div><label>Langue de la voix</label><select id="sas-lang"><option value="auto">Automatique</option><option value="fr">Français</option><option value="ar">العربية (arabe)</option></select>
+      <select id="sas-voixar" style="margin-top:6px"><option value="ar-SA-HamedNeural">Voix arabe : homme (Hamed)</option><option value="ar-SA-ZariyahNeural">Voix arabe : femme (Zariyah)</option><option value="ar-MA-JamalNeural">Voix arabe marocaine : homme (Jamal)</option><option value="ar-MA-MounaNeural">Voix arabe marocaine : femme (Mouna)</option></select></div>
     <div><label>Musique</label><select id="sas-music"><option value="elan">Élan (dynamique)</option><option value="calme">Calme (piano doux)</option><option value="dramatique">Dramatique</option><option value="aucune">Sans musique</option></select></div>
   </div>
   <div class="row">
@@ -130,7 +131,7 @@ async function put(path,contentB64,msg){return gh("/contents/"+path,{method:"PUT
 function step(txt,pct,det){$("sas-prog").style.display="block";$("sas-step").textContent=txt;$("sas-pbar").style.width=pct+"%";$("sas-det").innerHTML=det||""}
 $("sas-go").onclick=async()=>{
   if(!TOKEN){$("sas-setup").style.display="block";return}
-  const job={langue:$("sas-lang").value,mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
+  const job={langue:$("sas-lang").value,voix_ar:$("sas-voixar").value,mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
   if(!files.length){$("sas-drop").scrollIntoView({block:"center"});$("sas-drop").style.borderColor="#ff6b6b";return alert("Ajoutez vos photos (5 conseillées).")}
   if(mode=="url"){job.url=$("sas-url").value.trim();if(!job.url)return alert("Collez le lien de l’article.")}
   else{job.text=$("sas-text").value.trim();job.title=$("sas-title").value.trim();if(!job.text)return alert("Collez le texte de l’article.")}
