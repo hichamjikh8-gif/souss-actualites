@@ -57,6 +57,15 @@ jobs:
         run: |
           D="${{ steps.job.outputs.dir }}/out"; ID="${{ steps.job.outputs.id }}"
           if ls $D/*.mp4 >/dev/null 2>&1; then
+            python3 - "$D" "$ID" <<'PY'
+          import base64, glob, os, sys, requests
+          d, i = sys.argv[1], sys.argv[2]
+          f = glob.glob(d + "/*.mp4")[0]
+          r = requests.put(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/sorties/{i}/{os.path.basename(f)}",
+                           headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"]},
+                           json={"message": f"Vidéo {i}", "branch": "videos", "content": base64.b64encode(open(f, "rb").read()).decode()})
+          print("copie raw:", r.status_code)
+          PY
             gh release create "job-$ID" $D/*.mp4 $D/miniature.jpg $D/description.txt $D/result.json \
               --target videos --title "Vidéo $ID" --notes-file $D/description.txt --prerelease
           else

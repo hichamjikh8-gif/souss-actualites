@@ -84,6 +84,8 @@
       <b style="font-size:18px">✅ Vidéo prête</b><br>
       <a class="btn" id="sas-dl" href="#" target="_blank">⬇ Télécharger la vidéo</a>
       <button class="btn" id="sas-copy">📋 Copier le texte</button><br>
+      <button class="btn" id="sas-wp" style="background:#2a1d12;border-color:#e6781e">📰 Ajouter à l’article</button>
+      <span class="muted" id="sas-wpst"></span><br>
       <a class="btn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank">TikTok</a>
       <a class="btn" href="https://studio.youtube.com/" target="_blank">YouTube</a>
       <a class="btn" href="https://www.facebook.com/" target="_blank">Facebook</a>
@@ -139,6 +141,33 @@ $("sas-go").onclick=async()=>{
       if(s>1500){clearInterval(timer);step("Trop long : vérifiez le détail sur GitHub.",100);$("sas-go").disabled=false}},10000);
   }catch(e){step("Erreur : "+e.message,100);$("sas-step").classList.add("err");$("sas-go").disabled=false}
 };
+let CUR={blob:null,name:"",url:""};
+async function wpNonce(){const r=await fetch("/wp-admin/admin-ajax.php?action=rest-nonce",{credentials:"include"});if(!r.ok)throw new Error("connectez-vous à WordPress");return (await r.text()).trim()}
+$("sas-wp").onclick=async()=>{
+  const st=$("sas-wpst");
+  try{
+    let url=CUR.url;
+    if(!url){url=prompt("Lien de l’article où ajouter la vidéo :","");if(!url)return}
+    const slug=decodeURIComponent(url.split("?")[0].split("/").filter(Boolean).pop());
+    st.textContent="Recherche de l’article…";
+    const nonce=await wpNonce(),H={"X-WP-Nonce":nonce};
+    const posts=await (await fetch("/wp-json/wp/v2/posts?context=edit&status=publish,future,draft,private&slug="+encodeURIComponent(slug),{headers:H,credentials:"include"})).json();
+    if(!posts.length)throw new Error("article introuvable");
+    const post=posts[0],raw=post.content.raw;
+    if(raw.includes("sas-studio-video"))throw new Error("cet article contient déjà une vidéo du studio");
+    if(!confirm("Ajouter la vidéo en haut de l’article :\n« "+post.title.raw+" » ?"))return;
+    if(!CUR.blob)throw new Error("vidéo pas encore chargée");
+    st.textContent="Envoi de la vidéo vers WordPress…";
+    const up=await fetch("/wp-json/wp/v2/media",{method:"POST",credentials:"include",headers:Object.assign({"Content-Type":"video/mp4","Content-Disposition":'attachment; filename="'+CUR.name+'"'},H),body:CUR.blob});
+    if(!up.ok)throw new Error("envoi refusé ("+up.status+") : "+(await up.text()).slice(0,150));
+    const media=await up.json();
+    const block='<!-- wp:video {"id":'+media.id+',"className":"sas-studio-video"} -->\n<figure class="wp-block-video sas-studio-video"><video controls playsinline preload="metadata" src="'+media.source_url+'"></video></figure>\n<!-- /wp:video -->\n\n';
+    st.textContent="Mise à jour de l’article…";
+    const r=await fetch("/wp-json/wp/v2/posts/"+post.id,{method:"POST",credentials:"include",headers:Object.assign({"Content-Type":"application/json"},H),body:JSON.stringify({content:block+raw})});
+    if(!r.ok)throw new Error("mise à jour refusée ("+r.status+")");
+    st.innerHTML='✅ Ajoutée. <a href="'+post.link+'" target="_blank" style="color:#e6781e">Voir l’article</a>';
+  }catch(e){st.innerHTML='<span class="err">'+e.message+'</span>'}
+};
 async function show(rel){
   $("sas-go").disabled=false;
   const mp4=rel.assets.find(a=>a.name.endsWith(".mp4"));const dsc=rel.assets.find(a=>a.name=="description.txt");
@@ -146,7 +175,8 @@ async function show(rel){
   step("Terminé ✅",100);
   $("sas-result").style.display="block";
   $("sas-dl").href=mp4.browser_download_url;
-  try{const blob=await (await fetch(mp4.url,{headers:{"Authorization":"Bearer "+TOKEN,"Accept":"application/octet-stream"}})).blob();$("sas-video").src=URL.createObjectURL(blob);
+  const m=(rel.body||"").match(/L'article complet : (\S+)/);CUR={blob:null,name:mp4.name,url:(m&&m[1].startsWith("http"))?m[1]:""};$("sas-wpst").textContent="";
+  try{const rawu="https://raw.githubusercontent.com/"+OWNER+"/"+REPO+"/"+BRANCH+"/sorties/"+rel.tag_name.replace(/^job-/,"")+"/"+mp4.name;const rr=await fetch(rawu);if(!rr.ok)throw new Error("raw "+rr.status);const blob=await rr.blob();CUR.blob=blob;$("sas-video").src=URL.createObjectURL(blob);
       $("sas-dl").href=URL.createObjectURL(blob);$("sas-dl").download=mp4.name}catch(e){$("sas-video").src=mp4.browser_download_url}
   $("sas-desc").textContent=rel.body||"";
   $("sas-result").scrollIntoView({behavior:"smooth"});hist();
