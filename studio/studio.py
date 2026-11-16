@@ -104,6 +104,7 @@ CAT_AR = {"économie": "اقتصاد", "sport": "رياضة", "politique": "سي
           "tourisme": "سياحة", "business": "أعمال", "tendances": "توجهات", "enquêtes": "تحقيقات", "opinion": "رأي"}
 if (not CFG.get("rubrique") or CFG.get("rubrique", "").strip().lower() in ("actualité", "actualité · agadir")) and WP_CATS:
     CFG["rubrique"] = WP_CATS[0]
+CAT_FR = (WP_CATS[0] if WP_CATS else (CFG.get("rubrique") or "")).strip()
 if AR:
     rub = (CFG.get("rubrique") or "").strip()
     CFG["rubrique"] = CAT_AR.get(rub.lower().replace("’", "'"), rub if re.search(r"[\u0600-\u06FF]", rub) else "أخبار")
@@ -449,7 +450,12 @@ if CFG.get("musique", "elan") != "aucune":
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 W, H, FPS = 1080, 1920, 25
 F = HERE / "fonts"
-ACCENT = tuple(CFG.get("couleur", [230, 120, 30]))
+COULEURS = {"sport": (28, 168, 92), "politique": (214, 52, 52), "économie": (38, 118, 228), "business": (38, 118, 228),
+            "international": (128, 92, 238), "société": (0, 158, 168), "culture": (198, 58, 158), "tourisme": (0, 172, 198),
+            "enquêtes": (202, 150, 28), "tendances": (236, 72, 120), "opinion": (230, 120, 30)}
+_cat = CAT_FR.lower().replace("’", "'")
+ACCENT = tuple(CFG["couleur"]) if CFG.get("couleur") else next((c for k, c in COULEURS.items() if k in _cat), (230, 120, 30))
+log("Couleur de rubrique:", CAT_FR, ACCENT)
 def font(n, s, w=None):
     f = ImageFont.truetype(str(F / n), s)
     if w:
@@ -629,14 +635,73 @@ if CREDITS and len(MEDIA) > len(CREDITS): credit_txt += " ; Souss Actualités"
 _mc = OUT / "music.wav.credit"
 if CFG.get("musique", "elan") != "aucune": credit_txt += (". " + _mc.read_text() if _mc.exists() else ". Musique originale.")
 if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + (("، " + _mc.read_text()) if _mc.exists() else ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else ""))
+# ---- Chiffres clés animés
+STOPU = {"de", "du", "des", "d'", "et", "à", "au", "en", "le", "la", "les", "un", "une", "sur", "pour", "و", "في", "من", "على"}
+FIGS, _last = [], -99
+_allw = [w_ for sg in segs[1:] for w_ in sg["words"]]
+_i = 0
+while _i < len(_allw):
+    w0 = _allw[_i]
+    if re.search(r"\d", w0[2]):
+        j = _i; num = []
+        while j < len(_allw) and re.fullmatch(r"[\d.,\u00a0\u202f%ᵉe]+|\d+(er|e|ème)?", _allw[j][2].strip(".,;:")):
+            num.append(_allw[j][2].strip(",;:")); j += 1
+        unit = []
+        while j < len(_allw) and len(unit) < 3 and not re.search(r"\d", _allw[j][2]):
+            wd = _allw[j][2]; unit.append(wd.strip(".,;:!?؟،")); j += 1
+            if re.search(r"[.,;:!?؟،]$", wd): break
+        while unit and unit[-1].lower() in STOPU: unit.pop()
+        val = " ".join(num).strip(".")
+        is_year = re.fullmatch(r"(19|20)\d\d", val) is not None
+        if val and not (is_year and not unit) and w0[0] - _last > 3.5:
+            FIGS.append((w0[0], val, " ".join(unit[:3]))); _last = w0[0]
+        _i = max(j, _i + 1)
+    else:
+        _i += 1
+log("Chiffres clés:", [(round(a_, 1), b_, c_) for a_, b_, c_ in FIGS])
+F_FIG = font("Inter-Black.otf", 170)
+def fig_card(val, unit):
+    fu = arfont(54) if (AR and re.search(r"[\u0600-\u06FF]", unit)) else font("Inter-Bold.otf", 54)
+    tmp = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    vw = tmp.textlength(val, font=F_FIG); uw = tlen(tmp, unit, fu) if unit else 0
+    cw_ = int(max(vw, uw) + 120); ch_ = 300 if unit else 230
+    card = Image.new("RGBA", (cw_, ch_), (0, 0, 0, 0)); dc = ImageDraw.Draw(card)
+    dc.rounded_rectangle((0, 0, cw_ - 1, ch_ - 1), radius=40, fill=(12, 12, 14, 215))
+    dc.rounded_rectangle((0, 0, cw_ - 1, 14), radius=7, fill=ACCENT + (255,))
+    dc.text(((cw_ - vw) / 2, 30), val, font=F_FIG, fill=ACCENT + (255,))
+    if unit: T(dc, ((cw_ - uw) / 2, 212), unit, fu, (255, 255, 255, 255))
+    return card
+_figcards = {}
+def back_ease(p):
+    p = min(max(p, 0), 1); c1 = 1.70158; c3 = c1 + 1
+    return 1 + c3 * (p - 1) ** 3 + c1 * (p - 1) ** 2
+def figure(fr, tv):
+    for k, (t0, val, unit) in enumerate(FIGS):
+        if t0 - 0.05 <= tv <= t0 + 2.4:
+            if k not in _figcards: _figcards[k] = fig_card(val, unit)
+            card = _figcards[k]; dt = tv - t0
+            sc_ = max(0.05, back_ease(dt / 0.35)); al = min(1, dt / 0.15) * (1 - max(0, (dt - 2.1) / 0.3))
+            cw_, ch_ = int(card.width * sc_), int(card.height * sc_)
+            c2 = fade(card.resize((max(cw_, 1), max(ch_, 1)), Image.BILINEAR), al)
+            fr.alpha_composite(c2, (int((W - cw_) / 2), int(830 - ch_ / 2)))
+    return fr
 _intro_brand = Image.new("RGBA", (W, H), (0, 0, 0, 0)); _ib = ImageDraw.Draw(_intro_brand)
-_bf = arfont(110) if AR else font("Inter-Black.otf", 96)
-_bt = "أخبار سوس" if AR else "SOUSS ACTUALITÉS"
-T(_ib, ((W - tlen(_ib, _bt, _bf)) / 2, 840), _bt, _bf, (255, 255, 255, 255))
+LOGO = HERE / "logo" / "logo.png"
+_card_w, _card_h = 820, 600
+_cy = 640
+_ib.rounded_rectangle(((W - _card_w) / 2, _cy, (W + _card_w) / 2, _cy + _card_h), radius=36, fill=(255, 255, 255, 255))
+if LOGO.exists():
+    _lg = Image.open(LOGO).convert("RGBA"); _lg.thumbnail((_card_w - 80, _card_h - 70), Image.LANCZOS)
+    _intro_brand.alpha_composite(_lg, (int((W - _lg.width) / 2), int(_cy + (_card_h - _lg.height) / 2)))
+else:
+    _bf = arfont(110) if AR else font("Inter-Black.otf", 96); _bt = "أخبار سوس" if AR else "SOUSS ACTUALITÉS"
+    T(_ib, ((W - tlen(_ib, _bt, _bf)) / 2, _cy + 240), _bt, _bf, (20, 20, 20, 255))
 _kt = CFG.get("rubrique") or ("أخبار" if AR else "Actualité")
-_kf = F_KICK if AR else font("Inter-SemiBold.otf", 38)
+_kf = F_KICK if AR else font("Inter-Bold.otf", 40)
 _kt = _kt if AR else _kt.upper()
-T(_ib, ((W - tlen(_ib, _kt, _kf)) / 2, 985), _kt, _kf, ACCENT + (255,))
+_kw = tlen(_ib, _kt, _kf) + 80
+_ib.rounded_rectangle(((W - _kw) / 2, _cy + _card_h + 40, (W + _kw) / 2, _cy + _card_h + 120), radius=40, fill=ACCENT + (255,))
+T(_ib, ((W - tlen(_ib, _kt, _kf)) / 2, _cy + _card_h + 56), _kt, _kf, (255, 255, 255, 255))
 def fade(img, a):
     if a >= 1: return img
     r_, g_, b_, al_ = img.split(); al_ = al_.point(lambda v: int(v * max(a, 0))); return Image.merge("RGBA", (r_, g_, b_, al_))
@@ -646,7 +711,7 @@ def intro(fr, t):
     fr = Image.alpha_composite(fr, ov)
     dd = ImageDraw.Draw(fr)
     bar = ease(t / 0.6) * 460                              # barre orange qui s'ouvre
-    if out_a > 0: dd.rectangle((W / 2 - bar / 2, 800, W / 2 + bar / 2, 812), fill=ACCENT + (int(255 * out_a),))
+    if out_a > 0: dd.rectangle((W / 2 - bar / 2, 590, W / 2 + bar / 2, 604), fill=ACCENT + (int(255 * out_a),))
     a_ = ease((t - 0.15) / 0.6) * out_a                    # logo qui apparaît en glissant
     sh = int(40 * (1 - ease((t - 0.15) / 0.6)))
     layer = fade(_intro_brand, a_)
@@ -707,10 +772,51 @@ for f in range(NF):
     dr = ImageDraw.Draw(fr)
     dr.rectangle((70, 1760, W - 70, 1766), fill=(85, 85, 85))
     dr.rectangle((70, 1760, 70 + (W - 140) * min(t / DUR, 1), 1766), fill=ACCENT)
+    if FIGS and t >= INTRO: fr = figure(fr, tv)
     if t > DUR - OUTRO: fr = outro(fr, min((t - (DUR - OUTRO)) / 0.8, 1))
     ff.stdin.write(fr.convert("RGB").tobytes())
 ff.stdin.close(); ff.wait()
 subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "2", "-i", str(VIDEO), "-frames:v", "1", "-vf", "scale=540:-1", str(OUT / "miniature.jpg")])
+# ---- Miniature YouTube 1280x720
+try:
+    TW, TH = 1280, 720
+    first = next((m for m in seq if Path(m).suffix.lower() not in VIDEXT), None)
+    if first:
+        bgi = Image.open(first).convert("RGB")
+    else:
+        bgi = Image.open(io.BytesIO(subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", "1", "-i", str(seq[0]), "-frames:v", "1", "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True).stdout)).convert("RGB")
+    sc_ = max(TW / bgi.width, TH / bgi.height); bgi = bgi.resize((int(bgi.width * sc_) + 1, int(bgi.height * sc_) + 1), Image.LANCZOS)
+    l_, t_ = (bgi.width - TW) // 2, (bgi.height - TH) // 2; th = bgi.crop((l_, t_, l_ + TW, t_ + TH)).convert("RGBA")
+    g = Image.new("L", (TW, 1))
+    for x in range(TW):
+        v = (1 - x / TW) if not AR else (x / TW)
+        g.putpixel((x, 0), int(235 * min(1, max(0, v * 1.35 - 0.05))))
+    sh_ = Image.new("RGBA", (TW, TH), (0, 0, 0, 0)); sh_.putalpha(g.resize((TW, TH))); th = Image.alpha_composite(th, sh_)
+    dt_ = ImageDraw.Draw(th)
+    ftt = arfont(74, True) if AR else font("Lora-Variable.ttf", 70, 700)
+    lines_t = textwrap.wrap(TITLE_SHOW, 24 if AR else 22)[:4]
+    yy = TH - 70 - len(lines_t) * (92 if AR else 84)
+    xb = TW - 60 if AR else 60
+    dt_.rectangle((xb - 8, yy - 40, xb + 8, yy - 40 + 18) if False else (xb - (140 if AR else 0), yy - 34, xb + (0 if AR else 140), yy - 22), fill=ACCENT)
+    for l in lines_t:
+        x_ = (xb - tlen(dt_, l, ftt)) if AR else xb
+        T(dt_, (x_ + 3, yy + 3), l, ftt, (0, 0, 0, 200)); T(dt_, (x_, yy), l, ftt, (255, 255, 255, 255)); yy += 92 if AR else 84
+    if LOGO.exists():
+        lg = Image.open(LOGO).convert("RGBA"); lg.thumbnail((230, 166), Image.LANCZOS)
+        card = Image.new("RGBA", (lg.width + 30, lg.height + 24), (0, 0, 0, 0))
+        ImageDraw.Draw(card).rounded_rectangle((0, 0, card.width - 1, card.height - 1), radius=16, fill=(255, 255, 255, 255))
+        card.alpha_composite(lg, (15, 12))
+        th.alpha_composite(card, ((TW - card.width - 40) if not AR else 40, 36))
+    kt_ = (CFG.get("rubrique") or "") if AR else (CFG.get("rubrique") or "").upper()
+    if kt_:
+        fk = arfont(34) if AR else font("Inter-Bold.otf", 32); kw_ = tlen(dt_, kt_, fk) + 50
+        x0 = (TW - 40 - kw_) if AR else 40
+        dt_.rounded_rectangle((x0, 40, x0 + kw_, 98), radius=29, fill=ACCENT)
+        T(dt_, (x0 + 25, 49 if not AR else 44), kt_, fk, (255, 255, 255, 255))
+    th.convert("RGB").save(OUT / "miniature_youtube.jpg", quality=92)
+    log("Miniature YouTube créée")
+except Exception as e:
+    log("Miniature YouTube impossible:", e)
 
 # ------------------------------------------------------------------ 7. textes réseaux sociaux
 art_url = CFG.get("url", "souss-actualites.com")

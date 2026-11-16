@@ -88,7 +88,8 @@
       <b style="font-size:18px">✅ Vidéo prête</b><br>
       <a class="btn" id="sas-dl" href="#" target="_blank">⬇ Télécharger la vidéo</a>
       <button class="btn" id="sas-copy">📋 Copier le texte</button>
-      <button class="btn" id="sas-del" style="border-color:#7a2b2b">🗑 Supprimer</button><br>
+      <button class="btn" id="sas-del" style="border-color:#7a2b2b">🗑 Supprimer</button>
+      <a class="btn" id="sas-thumb" href="#" target="_blank" style="display:none">🖼 Miniature YouTube</a><br>
       <button class="btn" id="sas-wp" style="background:#2a1d12;border-color:#e6781e">📰 Ajouter à l’article</button>
       <span class="muted" id="sas-wpst"></span><br>
       <div style="margin-top:14px;padding:14px;border:1px solid #3a404b;border-radius:10px">
@@ -207,7 +208,8 @@ async function delJob(tag,ask=true){
 $("sas-del").onclick=async()=>{if(!CURTAG)return;try{$("sas-del").textContent="Suppression…";if(await delJob(CURTAG)){$("sas-del").textContent="🗑 Supprimer";$("sas-result").style.display="none";$("sas-prog").style.display="none";hist()}}catch(e){alert("Erreur : "+e.message)}};
 async function show(rel){CURTAG=rel.tag_name;
   $("sas-go").disabled=false;
-  const mp4=rel.assets.find(a=>a.name.endsWith(".mp4"));const dsc=rel.assets.find(a=>a.name=="description.txt");
+  const mp4=rel.assets.find(a=>a.name.endsWith(".mp4"));const thb=rel.assets.find(a=>a.name=="miniature_youtube.jpg");
+  if(thb){$("sas-thumb").href=thb.browser_download_url;$("sas-thumb").style.display="inline-block"}else{$("sas-thumb").style.display="none"}const dsc=rel.assets.find(a=>a.name=="description.txt");
   if(!mp4){step("La vidéo n’a pas pu être créée. Vérifiez le lien ou ajoutez des photos.",100);$("sas-step").classList.add("err");return}
   step("Terminé ✅",100);
   $("sas-result").style.display="block";
