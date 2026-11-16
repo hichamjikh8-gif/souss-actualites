@@ -13,23 +13,17 @@ CLASSIQUE = {
     "bach_air": ("File:Air (Bach).ogg", "Bach – Air de la Suite n°3"),
 }
 if MOOD in CLASSIQUE:
-    import requests, re, subprocess, os
+    import json, subprocess, os
+    from pathlib import Path
     title, nom = CLASSIQUE[MOOD]
-    UA = {"User-Agent": "SoussActualitesStudio/1.0 (souss-actualites.com)"}
-    r = requests.get("https://commons.wikimedia.org/w/api.php", headers=UA, timeout=30, params={
-        "action": "query", "titles": title, "prop": "imageinfo", "iiprop": "url|extmetadata", "format": "json"}).json()
-    pg = list(r["query"]["pages"].values())[0]; ii = pg["imageinfo"][0]; md = ii.get("extmetadata", {})
-    lic = md.get("LicenseShortName", {}).get("value", "")
-    if not re.search(r"public domain|pd|cc0|cc by", lic, re.I): raise SystemExit("licence non libre: " + lic)
-    artist = re.sub(r"<[^>]+>", "", md.get("Artist", {}).get("value", "")).strip()[:50]
-    src = OUTF + ".src"
-    open(src, "wb").write(requests.get(ii["url"], headers=UA, timeout=120).content)
+    here = Path(__file__).resolve().parent / "musique"
+    src = here / f"{MOOD}.ogg"
+    cr = json.load(open(here / "credits.json")).get(MOOD, {})
     fo = 4.0
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", src, "-t", str(DUR),
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(src), "-t", str(DUR),
                     "-af", f"loudnorm=I=-18:TP=-2,afade=t=in:d=1.5,afade=t=out:st={max(DUR - fo, 0)}:d={fo}",
                     "-ar", "44100", "-ac", "2", OUTF], check=True)
-    os.remove(src)
-    open(OUTF + ".credit", "w").write(f"Musique : {nom} ({artist}, {lic}, Wikimedia Commons)")
+    open(OUTF + ".credit", "w").write(f"Musique : {nom} ({cr.get('artist', '')}, {cr.get('licence', '')}, Wikimedia Commons)")
     sys.exit(0)
 SR = 44100
 P = {"elan":       dict(bpm=96, prog=[[50,57,62,65],[46,58,62,65],[53,57,60,65],[48,55,60,64]], roots=[38,34,41,36], drums=True, pad=0.22, arp=0.10),
