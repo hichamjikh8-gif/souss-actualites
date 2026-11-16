@@ -86,9 +86,14 @@
       <button class="btn" id="sas-copy">📋 Copier le texte</button><br>
       <button class="btn" id="sas-wp" style="background:#2a1d12;border-color:#e6781e">📰 Ajouter à l’article</button>
       <span class="muted" id="sas-wpst"></span><br>
-      <a class="btn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank">TikTok</a>
-      <a class="btn" href="https://studio.youtube.com/" target="_blank">YouTube</a>
-      <a class="btn" href="https://www.facebook.com/" target="_blank">Facebook</a>
+      <div style="margin-top:14px;padding:14px;border:1px solid #3a404b;border-radius:10px">
+        <b>Publier</b><br>
+        <button class="btn" id="sas-share" style="background:#e6781e;border-color:#e6781e;font-size:17px">📱 Envoyer vers TikTok / YouTube / WhatsApp</button><br>
+        <span class="muted">Sur téléphone : choisissez l’appli TikTok ou YouTube, la vidéo s’ouvre directement dedans. Le texte est copié, il suffit de le coller.</span><br>
+        <button class="btn" id="sas-tt">🎵 TikTok (ordinateur)</button>
+        <button class="btn" id="sas-yt">▶ YouTube (ordinateur)</button>
+        <div class="muted" id="sas-pubst" style="margin-top:6px"></div>
+      </div>
       <label>Texte pour les réseaux</label>
       <pre id="sas-desc"></pre>
     </div>
@@ -182,6 +187,23 @@ async function show(rel){
   $("sas-desc").textContent=rel.body||"";
   $("sas-result").scrollIntoView({behavior:"smooth"});hist();
 }
+function copyText(){try{navigator.clipboard.writeText($("sas-desc").textContent)}catch(e){}}
+function vidFile(){return new File([CUR.blob],CUR.name||"video.mp4",{type:"video/mp4"})}
+$("sas-share").onclick=async()=>{
+  if(!CUR.blob)return $("sas-pubst").textContent="Patientez, la vidéo se charge…";
+  copyText();const f=vidFile();
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:$("sas-desc").textContent.split("\n")[0],text:$("sas-desc").textContent})}catch(e){}}
+  else $("sas-pubst").innerHTML="Ce bouton marche sur téléphone. Sur ordinateur, utilisez les boutons TikTok ou YouTube.";
+};
+function pcPublish(url,name){
+  if(!CUR.blob)return $("sas-pubst").textContent="Patientez, la vidéo se charge…";
+  copyText();
+  const a=document.createElement("a");a.href=URL.createObjectURL(CUR.blob);a.download=CUR.name||"video.mp4";document.body.appendChild(a);a.click();a.remove();
+  window.open(url,"_blank");
+  $("sas-pubst").innerHTML="✅ Vidéo téléchargée et texte copié. Dans "+name+" : glissez la vidéo depuis vos <b>Téléchargements</b> (icône ⬇ en haut à droite de Chrome) dans la page, puis collez le texte (Ctrl+V).";
+}
+$("sas-tt").onclick=()=>pcPublish("https://www.tiktok.com/tiktokstudio/upload","TikTok");
+$("sas-yt").onclick=()=>pcPublish("https://studio.youtube.com/","YouTube");
 $("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textContent).then(()=>{$("sas-copy").textContent="✔ Copié"})};
 async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=8");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return "• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")}).join("<br>")||"Aucune vidéo pour l’instant.";
   document.querySelectorAll("#sas-hist a").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))})}catch(e){$("sas-hist").textContent="Clé GitHub invalide ? "+e.message}}
