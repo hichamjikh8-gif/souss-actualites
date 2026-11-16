@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Souss Studio — Telegram
  * Description: Créez une vidéo depuis votre téléphone : envoyez au bot Telegram « Souss Studio » le lien de l'article et vos photos, écrivez « video », et la vidéo terminée revient dans le chat. Indépendant du bot de publication existant.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Souss Actualités
  */
 
@@ -91,6 +91,18 @@ function sst_settings_page() {
 		<?php if ( ! sst_opt( 'chat_id' ) ) : ?>
 			<p>Pour relier votre téléphone, envoyez au bot ce message : <code style="font-size:18px">/start <?php echo esc_html( sst_opt( 'link_code' ) ); ?></code></p>
 		<?php endif; ?>
+		<?php
+		$hit  = get_option( 'sst_last_hit', array() );
+		$info = sst_opt( 'bot_token' ) ? sst_tg( 'getWebhookInfo' ) : null;
+		$wi   = ( $info && ! empty( $info['ok'] ) ) ? $info['result'] : array();
+		?>
+		<h2>Diagnostic</h2>
+		<ul>
+			<li>Adresse du webhook : <code><?php echo esc_html( isset( $wi['url'] ) ? $wi['url'] : '—' ); ?></code></li>
+			<li>Messages en attente chez Telegram : <?php echo esc_html( isset( $wi['pending_update_count'] ) ? (string) $wi['pending_update_count'] : '—' ); ?></li>
+			<li>Dernière erreur Telegram : <?php echo esc_html( ! empty( $wi['last_error_message'] ) ? $wi['last_error_message'] . ' (' . gmdate( 'H:i', (int) $wi['last_error_date'] ) . ' UTC)' : 'aucune' ); ?></li>
+			<li>Dernier message reçu par le site : <?php echo $hit ? esc_html( gmdate( 'H:i:s', (int) $hit['t'] ) . ' UTC — clé ' . ( $hit['secret_ok'] ? 'valide' : ( $hit['has_secret'] ? 'incorrecte' : 'absente' ) ) ) : 'jamais'; ?></li>
+		</ul>
 		<h2>Mode d'emploi</h2>
 		<ol>
 			<li>Envoyez au bot le <strong>lien de l'article</strong> (ou collez le texte).</li>
@@ -122,7 +134,12 @@ function sst_session( $chat, $set = null ) {
 
 function sst_webhook( WP_REST_Request $req ) {
 	$secret = (string) $req->get_header( 'x_telegram_bot_api_secret_token' );
-	if ( ! sst_opt( 'hook_secret' ) || ! hash_equals( sst_opt( 'hook_secret' ), $secret ) ) {
+	if ( '' === $secret && isset( $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'] ) ) {
+		$secret = (string) $_SERVER['HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN'];
+	}
+	$ok_secret = sst_opt( 'hook_secret' ) && hash_equals( sst_opt( 'hook_secret' ), $secret );
+	update_option( 'sst_last_hit', array( 't' => time(), 'secret_ok' => $ok_secret, 'has_secret' => '' !== $secret ), false );
+	if ( ! $ok_secret ) {
 		return new WP_REST_Response( array( 'ok' => false ), 403 );
 	}
 	$u   = $req->get_json_params();
@@ -135,7 +152,8 @@ function sst_webhook( WP_REST_Request $req ) {
 
 	// Liaison du téléphone (une seule fois, avec le code affiché dans les réglages)
 	if ( ! sst_opt( 'chat_id' ) ) {
-		if ( preg_match( '#^/start\s+(\S+)#i', $text, $mm ) && hash_equals( sst_opt( 'link_code' ), strtoupper( $mm[1] ) ) ) {
+		$norm = strtoupper( preg_replace( '#[^A-Za-z0-9]#', '', $text ) );
+		if ( sst_opt( 'link_code' ) && false !== strpos( $norm, sst_opt( 'link_code' ) ) ) {
 			update_option( 'sst_chat_id', $chat, false );
 			sst_say( $chat, "✅ Téléphone relié au Studio vidéo Souss Actualités.\n\n1) Envoyez le lien de l'article\n2) Envoyez vos photos\n3) Écrivez « video »" );
 		}
