@@ -70,7 +70,7 @@ else:
     ARTICLE_IMGS = []
 if CFG.get("title"):
     TITLE = CFG["title"]
-TITLE = TITLE.strip().rstrip(".")
+TITLE = TITLE.strip().rstrip(".…").strip()
 if TITLE.isupper():
     TITLE = TITLE[0] + TITLE[1:].lower()
 BYLINE = CFG.get("byline") or "Hicham Jikh Cheddad"
@@ -126,7 +126,7 @@ else:
                 if len(s.split()) < 4 and i > 0: continue
                 LINES.append(s); words += len(s.split())
         log("Résumé extractif:", words, "mots")
-LINES = [TITLE + "."] + [l for l in LINES if l.strip() and l.strip().rstrip(".") != TITLE]
+LINES = [TITLE + "."] + [l for l in LINES if l.strip() and l.strip().rstrip(".…") != TITLE and not (mode != "complet" and re.search(r"[\u1E00-\u1EFF\u2D30-\u2D7F\u0600-\u06FF]", l))]
 
 # --- prononciation
 from num2words import num2words
@@ -198,6 +198,21 @@ if CFG.get("photos_article", True):
         seen.add(base)
         p = dl(base, f"article_{i}{Path(urllib.parse.urlparse(base).path).suffix or '.jpg'}") or dl(u, f"article_{i}.jpg")
         if p: MEDIA.append(p)
+    log("Photos de l'article:", len([m for m in MEDIA if "article_" in str(m)]))
+# b2) banque de photos vérifiées
+TEXT_ALL = (TITLE + " " + " ".join(PARAS)).lower()
+THEMES = []
+if re.search(r"football|lions de l.atlas|stade|fifa|caf\b|coupe du monde|can 20|botola|hassania|sélection nationale", TEXT_ALL): THEMES.append("football")
+if re.search(r"agadir|souss|inezgane|aït melloul|taghazout", TEXT_ALL) or not THEMES: THEMES.append("agadir")
+for th in THEMES + CFG.get("banques", []):
+    bd = HERE / "banque" / th
+    if not bd.exists(): continue
+    cr = json.load(open(bd / "credits.json"))
+    files = sorted(bd.glob("*.jpg")); random.Random(TITLE).shuffle(files)
+    for f in files:
+        if len(MEDIA) >= max(int(VOICE_DUR / float(CFG.get("sec_par_image", 6.5))) + 1, 4): break
+        MEDIA.append(f); CREDITS.append(cr.get(f.name, ""))
+log("Banque:", THEMES)
 # c) Wikimedia Commons (photos réelles, libres) pour compléter
 need = max(int(VOICE_DUR / float(CFG.get("sec_par_image", 6.5))) + 1, 4)
 PLACES = ["Agadir", "Inezgane", "Aït Melloul", "Taroudant", "Tiznit", "Chtouka", "Tata", "Essaouira", "Guelmim", "Taghazout",
@@ -222,30 +237,42 @@ def commons_queries():
     if "maroc" in full and not q: q.append("Morocco")
     return q + CFG.get("mots_images", [])
 
+CATS = {"agadir": ["Views of Agadir", "Agadir Oufella", "Beaches of Agadir", "Marina of Agadir"],
+        "taroudant": ["Taroudant", "Walls of Taroudant"], "tiznit": ["Tiznit"], "inezgane": ["Inezgane"],
+        "essaouira": ["Essaouira", "Medina of Essaouira"], "taghazout": ["Taghazout"], "tafraout": ["Tafraout"],
+        "rabat": ["Views of Rabat", "Kasbah of the Udayas"], "casablanca": ["Views of Casablanca", "Hassan II Mosque"],
+        "marrakech": ["Views of Marrakesh", "Jemaa el-Fnaa"], "tanger": ["Views of Tangier"], "fès": ["Views of Fez"],
+        "dakhla": ["Dakhla"], "laâyoune": ["Laayoune"], "ouarzazate": ["Ouarzazate"], "tata": ["Tata Province"],
+        "maroc": ["Landscapes of Morocco", "Atlas Mountains"]}
+BAD = r"portrait|player|joueur|minist|presiden|président|selfie|logo|map|carte|flag|drapeau|soldier|soldat|army|armée|police|militar|weapon|gun|protest|manif|accident|fire|incendie|people|person|man |woman|girl|boy|face"
+def commons_cat(cat, limit):
+    try:
+        r = requests.get("https://commons.wikimedia.org/w/api.php", headers=UA, timeout=30, params={
+            "action": "query", "generator": "categorymembers", "gcmtitle": "Category:" + cat, "gcmtype": "file", "gcmlimit": 80,
+            "prop": "imageinfo", "iiprop": "url|size|extmetadata", "iiurlwidth": 1600, "format": "json"}).json()
+    except Exception as e:
+        log("Commons erreur", e); return []
+    out = []
+    for pg in (r.get("query") or {}).get("pages", {}).values():
+        ii = pg["imageinfo"][0]; md = ii.get("extmetadata", {})
+        lic = md.get("LicenseShortName", {}).get("value", "")
+        desc = (pg["title"] + " " + re.sub(r"<[^>]+>", " ", md.get("ImageDescription", {}).get("value", ""))).lower()
+        if ii["width"] < 1400 or ii["width"] < ii["height"] * 1.3: continue
+        if not re.search(r"cc|public domain|pd", lic, re.I) or re.search(BAD, desc): continue
+        artist = re.sub(r"<[^>]+>", "", md.get("Artist", {}).get("value", "")).strip()[:40]
+        out.append((ii["thumburl"], f"{artist} ({lic})"))
+    random.Random(cat).shuffle(out)
+    return out[:limit]
 if len(MEDIA) < need and CFG.get("commons", True):
     got = 0
-    for q in commons_queries():
+    keys = [k for k in CATS if k in TEXT_ALL and k != "maroc"] or ["agadir"]
+    cats = [c for k in keys[:3] for c in CATS[k]] + CFG.get("categories_commons", []) + CATS["maroc"]
+    for cat in cats:
         if len(MEDIA) >= need: break
-        try:
-            r = requests.get("https://commons.wikimedia.org/w/api.php", headers=UA, timeout=30, params={
-                "action": "query", "generator": "search", "gsrsearch": f"{q} filetype:bitmap", "gsrnamespace": 6,
-                "gsrlimit": 30, "prop": "imageinfo", "iiprop": "url|size|extmetadata", "iiurlwidth": 1600, "format": "json"}).json()
-        except Exception as e:
-            log("Commons erreur", e); continue
-        pages = sorted((r.get("query") or {}).get("pages", {}).values(), key=lambda p: p.get("index", 99))
-        for pg in pages:
+        for url, cr in commons_cat(cat, 3):
             if len(MEDIA) >= need: break
-            ii = pg["imageinfo"][0]; md = ii.get("extmetadata", {})
-            lic = md.get("LicenseShortName", {}).get("value", "")
-            title_l = pg["title"].lower()
-            if ii["width"] < 1300 or ii["width"] < ii["height"] * 1.25: continue
-            if not re.search(r"cc|public domain|pd", lic, re.I): continue
-            if re.search(r"portrait|player|joueur|minister|ministre|president|président|selfie|logo|map|carte|flag of|drapeau", title_l): continue
-            p = dl(ii["thumburl"], f"commons_{got}.jpg")
-            if p:
-                MEDIA.append(p); got += 1
-                artist = re.sub(r"<[^>]+>", "", md.get("Artist", {}).get("value", "")).strip()[:40]
-                CREDITS.append(f"{artist} ({lic})")
+            p = dl(url, f"commons_{got}.jpg")
+            if p: MEDIA.append(p); CREDITS.append(cr); got += 1
     log("Photos Commons:", got)
 if not MEDIA:
     raise SystemExit("Aucune image trouvée: ajoutez des photos.")
@@ -368,6 +395,7 @@ for l in tl: d.text((70, y), l, font=F_TITLE, fill="white"); y += 70
 d.rectangle((0, PH_Y - 6, W, PH_Y), fill=ACCENT)
 url = "souss-actualites.com"; d.text(((W - d.textlength(url, font=F_URL)) / 2, 1790), url, font=F_URL, fill=(235, 235, 235))
 
+CREDITS = [c for c in CREDITS if c]
 credit_txt = "Photos : " + ("Wikimedia Commons — " + ", ".join(dict.fromkeys(CREDITS)) if CREDITS else "Souss Actualités")
 if CREDITS and len(MEDIA) > len(CREDITS): credit_txt += " ; Souss Actualités"
 if CFG.get("musique", "elan") != "aucune": credit_txt += ". Musique originale."
@@ -383,7 +411,8 @@ def outro(fr, a):
         dd.text(((W - dd.textlength(l, font=F_SMALL)) / 2, yy), l, font=F_SMALL, fill=(170, 170, 170, al)); yy += 32
     return Image.alpha_composite(fr, ov)
 
-slug = re.sub(r"[^a-z0-9]+", "-", TITLE.lower().encode("ascii", "ignore").decode())[:50].strip("-") or "video"
+import unicodedata
+slug = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", TITLE.lower()).encode("ascii", "ignore").decode())[:60].strip("-") or "video"
 VIDEO = OUT / f"{slug}.mp4"
 has_music = (OUT / "music.wav").exists()
 af = "[1:a]adelay=500|500,apad,aformat=channel_layouts=stereo:sample_rates=44100"
