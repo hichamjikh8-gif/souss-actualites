@@ -83,7 +83,8 @@
     <div>
       <b style="font-size:18px">✅ Vidéo prête</b><br>
       <a class="btn" id="sas-dl" href="#" target="_blank">⬇ Télécharger la vidéo</a>
-      <button class="btn" id="sas-copy">📋 Copier le texte</button><br>
+      <button class="btn" id="sas-copy">📋 Copier le texte</button>
+      <button class="btn" id="sas-del" style="border-color:#7a2b2b">🗑 Supprimer</button><br>
       <button class="btn" id="sas-wp" style="background:#2a1d12;border-color:#e6781e">📰 Ajouter à l’article</button>
       <span class="muted" id="sas-wpst"></span><br>
       <div style="margin-top:14px;padding:14px;border:1px solid #3a404b;border-radius:10px">
@@ -174,7 +175,20 @@ $("sas-wp").onclick=async()=>{
     st.innerHTML='✅ Ajoutée. <a href="'+post.link+'" target="_blank" style="color:#e6781e">Voir l’article</a>';
   }catch(e){st.innerHTML='<span class="err">'+e.message+'</span>'}
 };
-async function show(rel){
+let CURTAG="";
+async function delJob(tag){
+  const id=tag.replace(/^job-/,"");
+  if(!confirm("Supprimer définitivement cette vidéo du studio ?\n(Elle reste sur YouTube/TikTok/WordPress si vous l’y avez déjà publiée.)"))return false;
+  const rel=await gh("/releases/tags/"+tag);
+  if(rel)await gh("/releases/"+rel.id,{method:"DELETE"});
+  try{await gh("/git/refs/tags/"+tag,{method:"DELETE"})}catch(e){}
+  async function rm(path){const items=await gh("/contents/"+path+"?ref="+BRANCH);if(!items)return;
+    for(const it of (Array.isArray(items)?items:[items])){if(it.type=="dir")await rm(it.path);else await gh("/contents/"+it.path,{method:"DELETE",body:JSON.stringify({message:"Suppression "+id,sha:it.sha,branch:BRANCH})})}}
+  await rm("sorties/"+id);await rm("jobs/"+id);
+  return true;
+}
+$("sas-del").onclick=async()=>{if(!CURTAG)return;try{if(await delJob(CURTAG)){$("sas-result").style.display="none";$("sas-prog").style.display="none";hist()}}catch(e){alert("Erreur : "+e.message)}};
+async function show(rel){CURTAG=rel.tag_name;
   $("sas-go").disabled=false;
   const mp4=rel.assets.find(a=>a.name.endsWith(".mp4"));const dsc=rel.assets.find(a=>a.name=="description.txt");
   if(!mp4){step("La vidéo n’a pas pu être créée. Vérifiez le lien ou ajoutez des photos.",100);$("sas-step").classList.add("err");return}
@@ -205,8 +219,9 @@ function pcPublish(url,name){
 $("sas-tt").onclick=()=>pcPublish("https://www.tiktok.com/tiktokstudio/upload","TikTok");
 $("sas-yt").onclick=()=>pcPublish("https://studio.youtube.com/","YouTube");
 $("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textContent).then(()=>{$("sas-copy").textContent="✔ Copié"})};
-async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=8");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return "• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")}).join("<br>")||"Aucune vidéo pour l’instant.";
-  document.querySelectorAll("#sas-hist a").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))})}catch(e){$("sas-hist").textContent="Clé GitHub invalide ? "+e.message}}
+async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=8");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return "• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")+' <a href="#" class="sas-x" data-d="'+r.tag_name+'" title="Supprimer" style="color:#ff6b6b;text-decoration:none">🗑</a>'}).join("<br>")||"Aucune vidéo pour l’instant.";
+  document.querySelectorAll("#sas-hist a[data-t]").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))});
+  document.querySelectorAll("#sas-hist a.sas-x").forEach(a=>a.onclick=async e=>{e.preventDefault();try{if(await delJob(a.dataset.d)){if(CURTAG==a.dataset.d)$("sas-result").style.display="none";hist()}}catch(err){alert("Erreur : "+err.message)}})}catch(e){$("sas-hist").textContent="Clé GitHub invalide ? "+e.message}}
 $("sas-reload").onclick=e=>{e.preventDefault();hist()};
 hist();
 })();
