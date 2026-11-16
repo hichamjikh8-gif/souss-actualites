@@ -64,7 +64,9 @@
 </div>
 
 <div class="card">
-  <label style="margin-top:0">Vos photos et vidéos <span style="color:#e6781e">(obligatoire)</span></label>
+  <label style="margin-top:0">Mouvement des photos</label>
+  <select id="sas-effet"><option value="3d">✨ Effet 3D par IA (la caméra entre dans la photo)</option><option value="2d">Zoom classique</option></select>
+  <label>Vos photos et vidéos <span style="color:#e6781e">(obligatoire)</span></label>
   <div class="drop" id="sas-drop"><b style="font-size:18px">📷 Cliquez ici pour choisir vos photos</b><br><span class="muted">5 photos conseillées pour une vidéo d’1 minute — elles apparaissent dans l’ordre, avec un zoom doux</span></div>
   <input type="file" id="sas-files" multiple accept="image/*,video/*" style="display:none">
   <div class="thumbs" id="sas-thumbs"></div>
@@ -132,7 +134,7 @@ async function put(path,contentB64,msg){return gh("/contents/"+path,{method:"PUT
 function step(txt,pct,det){$("sas-prog").style.display="block";$("sas-step").textContent=txt;$("sas-pbar").style.width=pct+"%";$("sas-det").innerHTML=det||""}
 $("sas-go").onclick=async()=>{
   if(!TOKEN){$("sas-setup").style.display="block";return}
-  const job={langue:$("sas-lang").value,voix_fr:$("sas-voixfr").value,voix_ar:$("sas-voixar").value,mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
+  const job={effet:$("sas-effet").value,langue:$("sas-lang").value,voix_fr:$("sas-voixfr").value,voix_ar:$("sas-voixar").value,mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
   if(!files.length){$("sas-drop").scrollIntoView({block:"center"});$("sas-drop").style.borderColor="#ff6b6b";return alert("Ajoutez vos photos (5 conseillées).")}
   if(mode=="url"){job.url=$("sas-url").value.trim();if(!job.url)return alert("Collez le lien de l’article.")}
   else{job.text=$("sas-text").value.trim();job.title=$("sas-title").value.trim();if(!job.text)return alert("Collez le texte de l’article.")}

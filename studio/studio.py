@@ -535,7 +535,17 @@ def text_layer(words_, hi):
 PH_W, PH_H, PH_Y = 1080, 640, 600
 FULL = CFG.get("plein_ecran", True)
 def ease(p): return 0.5 - 0.5 * math.cos(math.pi * min(max(p, 0), 1))
-class Still:
+EFFET = CFG.get("effet", "3d")
+def Still(path):
+    if EFFET == "3d":
+        try:
+            sys.path.insert(0, str(HERE))
+            from effet3d import Photo3D
+            return Photo3D(path, W, H)
+        except Exception as e:
+            log("Effet 3D indisponible, zoom classique :", e)
+    return Still2D(path)
+class Still2D:
     """Photo plein écran avec mouvement « Ken Burns » bien visible."""
     def __init__(self, path):
         im = Image.open(path).convert("RGB")

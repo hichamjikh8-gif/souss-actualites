@@ -9,3 +9,5 @@ piper-tts==1.8.0
 arabic-reshaper
 python-bidi
 edge-tts
+opencv-python-headless
+onnxruntime
