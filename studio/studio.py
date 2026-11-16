@@ -198,44 +198,67 @@ def spoken(s):
 import numpy as np, soundfile as sf
 KD = os.environ.get("KOKORO_DIR", str(HERE / "models"))
 speed = float(CFG.get("vitesse", 1.05))
-if AR:
-    import wave, io, asyncio, tempfile
-    AR_VOICE = CFG.get("voix_ar", "ar-SA-HamedNeural")
-    pv = None
-    def say_piper(txt):
-        global pv
-        from piper import PiperVoice
-        from piper.config import SynthesisConfig
-        if pv is None: pv = PiperVoice.load(f"{KD}/ar_JO-kareem-medium.onnx")
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            pv.synthesize_wav(txt, wf, syn_config=SynthesisConfig(length_scale=0.85 / speed))
-        buf.seek(0); return sf.read(buf, dtype="float32")
-    def say(txt):
-        """Voix neuronale arabe (naturelle). Repli automatique sur Piper si indisponible."""
-        try:
-            import edge_tts
-            mp3 = tempfile.mktemp(suffix=".mp3"); wav = mp3[:-4] + ".wav"
-            rate = f"+{int(round((speed - 1) * 100)) + 5}%"
-            asyncio.run(edge_tts.Communicate(txt, AR_VOICE, rate=rate).save(mp3))
-            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", mp3, "-ac", "1", "-ar", "24000", wav], check=True)
-            return sf.read(wav, dtype="float32")
-        except Exception as e:
-            log("Voix neuronale indisponible, repli Piper:", e)
-            return say_piper(txt)
-else:
+import wave, io, asyncio, tempfile
+def say_edge(txt, voice):
+    """Voix neuronale naturelle + minutage exact de chaque mot."""
+    import edge_tts
+    rate = f"{int(round((speed - 1) * 100)) + (5 if AR else 0):+d}%"
+    async def run():
+        try: com = edge_tts.Communicate(txt, voice, rate=rate, boundary="WordBoundary")
+        except TypeError: com = edge_tts.Communicate(txt, voice, rate=rate)
+        aud, words = bytearray(), []
+        async for ch in com.stream():
+            if ch["type"] == "audio": aud += ch["data"]
+            elif ch["type"] == "WordBoundary": words.append((ch["offset"] / 1e7, ch["duration"] / 1e7, ch["text"]))
+        return bytes(aud), words
+    aud, words = asyncio.run(run())
+    if not aud: raise RuntimeError("audio vide")
+    mp3 = tempfile.mktemp(suffix=".mp3"); wav = mp3[:-4] + ".wav"; open(mp3, "wb").write(aud)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", mp3, "-ac", "1", "-ar", "24000", wav], check=True)
+    a, r = sf.read(wav, dtype="float32")
+    return a, r, (words or None)
+pv, kok = None, None
+def say_piper(txt):
+    global pv
+    from piper import PiperVoice
+    from piper.config import SynthesisConfig
+    if pv is None: pv = PiperVoice.load(f"{KD}/ar_JO-kareem-medium.onnx")
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        pv.synthesize_wav(txt, wf, syn_config=SynthesisConfig(length_scale=0.85 / speed))
+    buf.seek(0); a, r = sf.read(buf, dtype="float32"); return a, r, None
+def say_kokoro(txt):
+    global kok
     from kokoro_onnx import Kokoro
-    kok = Kokoro(f"{KD}/kokoro-v1.0.onnx", f"{KD}/voices-v1.0.bin")
-    def say(txt):
-        if "(en)" in kok.tokenizer.phonemize(txt, "fr-fr"): log("Attention prononciation anglaise:", txt)
-        return kok.create(txt, voice=CFG.get("voix", "ff_siwis"), speed=speed, lang="fr-fr")
+    if kok is None: kok = Kokoro(f"{KD}/kokoro-v1.0.onnx", f"{KD}/voices-v1.0.bin")
+    a, r = kok.create(spoken(txt), voice="ff_siwis", speed=speed, lang="fr-fr"); return a, r, None
+VOICE = CFG.get("voix_ar", "ar-SA-HamedNeural") if AR else CFG.get("voix_fr", "fr-FR-HenriNeural")
+def neural_text(txt):
+    t_ = txt.replace("«", "").replace("»", "").replace("ᵉ", "e")
+    for a_, b_ in {r"\bMDH\b": "millions de dirhams", r"\bMMDH\b": "milliards de dirhams", r"\bDH\b": "dirhams"}.items():
+        t_ = re.sub(a_, b_, t_)
+    return re.sub(r"\s+", " ", t_).strip()
+NEURAL_OK = True
+def say(txt):
+    global NEURAL_OK
+    if VOICE != "kokoro" and NEURAL_OK:
+        try:
+            return say_edge(neural_text(txt), VOICE)
+        except Exception as e:
+            NEURAL_OK = False; log("Voix neuronale indisponible, repli:", e)
+    return say_piper(spoken(txt)) if AR else say_kokoro(txt)
+log("Voix:", VOICE)
 segs, audio, t, sr = [], [], 0.0, 24000
 for line in LINES:
-    sp = spoken(line)
-    a, sr = say(sp)
-    gap = np.zeros(int(sr * 0.32), dtype=a.dtype)
-    segs.append({"text": line, "start": t, "end": t + len(a) / sr})
-    t += len(a) / sr + 0.32; audio += [a, gap]
+    a, sr, words = say(line)
+    dur = len(a) / sr
+    if not words:  # minutage estimé à partir de la longueur des mots
+        ws = line.split(); tot = sum(len(w) + 1 for w in ws) or 1; c0 = 0.05; words = []
+        for w in ws:
+            dd = (dur - 0.1) * (len(w) + 1) / tot; words.append((c0, dd, w)); c0 += dd
+    gap = np.zeros(int(sr * 0.30), dtype=a.dtype)
+    segs.append({"text": line, "start": t, "end": t + dur, "words": [(t + o, t + o + d_, w) for o, d_, w in words]})
+    t += dur + 0.30; audio += [a, gap]
 sf.write(OUT / "voice.wav", np.concatenate(audio), sr)
 VOICE_DUR = t
 log("Voix:", round(VOICE_DUR, 1), "s,", len(segs), "phrases")
@@ -462,35 +485,51 @@ if AR:
     F_SMALL = arfont(26)
 log("Moteur texte RAQM:", RAQM)
 TITLE_SHOW = TITLE.replace("ᵉ", "e")
-OUTRO = 3.5
-DUR = VOICE_DUR + 0.5 + OUTRO
+OUTRO = 4.0
+INTRO = float(CFG.get("intro", 2.0))
+DUR = INTRO + VOICE_DUR + OUTRO
 NF = int(DUR * FPS)
 
+# Sous-titres « karaoké » : 1 à 2 lignes, le mot prononcé est surligné
 chunks = []
-for s in segs:
-    words = s["text"].split(); groups, cur = [], []
-    for w in words:
-        cur.append(w)
-        if len(" ".join(cur)) > 38 and len(cur) >= 4: groups.append(cur); cur = []
+for sg in segs:
+    cur = []
+    for wd in sg["words"]:
+        cur.append(wd)
+        txt_ = " ".join(x[2] for x in cur)
+        if len(txt_) > 34 or (re.search(r"[.,;:!?؟،]$", wd[2]) and len(cur) >= 3):
+            chunks.append(cur); cur = []
     if cur:
-        if groups and len(cur) <= 2: groups[-1] += cur
-        else: groups.append(cur)
-    n = sum(len(" ".join(g)) for g in groups); t0 = s["start"]; d = s["end"] - s["start"]
-    for g in groups:
-        tx = " ".join(g); dd = d * len(tx) / n; chunks.append((t0, t0 + dd, tx)); t0 += dd
-
-def text_layer(txt):
+        if chunks and len(cur) <= 1 and chunks[-1][-1][1] >= sg["start"]: chunks[-1] += cur
+        else: chunks.append(cur)
+SUB_MAXW = 900
+def layout(words_):
+    d_ = ImageDraw.Draw(Image.new("RGBA", (10, 10)))
+    sp = tlen(d_, " ", F_SUB) or 16
+    lines_, cur_, cw_ = [], [], 0
+    for i, w in enumerate(words_):
+        ww = tlen(d_, w, F_SUB)
+        if cur_ and cw_ + sp + ww > SUB_MAXW: lines_.append((cur_, cw_)); cur_, cw_ = [], 0
+        cur_.append((i, w, ww)); cw_ += (sp if len(cur_) > 1 else 0) + ww
+    if cur_: lines_.append((cur_, cw_))
+    return lines_, sp
+def text_layer(words_, hi):
     lay = Image.new("RGBA", (W, 360), (0, 0, 0, 0)); d = ImageDraw.Draw(lay)
-    lines = textwrap.wrap(txt, 26)
-    if len(lines) > 1 and len(lines[-1]) < 10: lines = textwrap.wrap(txt, max(14, len(txt) // len(lines) + 4))
-    lh = 90 if AR else 76; y0 = (360 - lh * len(lines)) // 2
-    if FULL:
-        bw = max(tlen(d, l, F_SUB) for l in lines) + 70
-        d.rounded_rectangle(((W - bw) / 2, y0 - 22, (W + bw) / 2, y0 + lh * len(lines) + 18), radius=22, fill=(0, 0, 0, 150))
-    for i, l in enumerate(lines):
-        w = tlen(d, l, F_SUB); x = (W - w) / 2; y = y0 + i * lh
-        for dx, dy in ((0, 4), (2, 4), (-2, 4)): T(d, (x + dx, y + dy), l, F_SUB, (0, 0, 0, 160))
-        T(d, (x, y), l, F_SUB, "white")
+    lines_, sp = layout(words_)
+    lh = 92 if AR else 80; y0 = (360 - lh * len(lines_)) // 2
+    bw = max(cw for _, cw in lines_) + 80
+    d.rounded_rectangle(((W - bw) / 2, y0 - 24, (W + bw) / 2, y0 + lh * len(lines_) + 16), radius=24, fill=(0, 0, 0, 155))
+    for li, (ln, cw) in enumerate(lines_):
+        y = y0 + li * lh
+        cx = (W + cw) / 2 if AR else (W - cw) / 2
+        for i, w, ww in ln:
+            x = cx - ww if AR else cx
+            if i == hi:
+                d.rounded_rectangle((x - 12, y - 4, x + ww + 12, y + lh - 14), radius=14, fill=ACCENT + (255,))
+            else:
+                T(d, (x + 2, y + 4), w, F_SUB, (0, 0, 0, 170))
+            T(d, (x, y), w, F_SUB, (255, 255, 255, 255))
+            cx = (cx - ww - sp) if AR else (cx + ww + sp)
     return lay
 
 PH_W, PH_H, PH_Y = 1080, 640, 600
@@ -537,7 +576,7 @@ VIDEXT = (".mp4", ".mov", ".m4v", ".webm")
 order = list(MEDIA)
 slots = max(len(order), int((VOICE_DUR + 1) / float(CFG.get("sec_par_image", 6.5))))
 seq = order if ONLY_MINE else ([order[i % len(order)] for i in range(slots)] if len(order) < slots else order)
-per = (VOICE_DUR + 1.0) / len(seq)
+per = (INTRO + VOICE_DUR + 1.0) / len(seq)
 sources = {}
 def src(i):
     if i not in sources:
@@ -579,12 +618,38 @@ credit_txt = "Photos : " + ("Wikimedia Commons — " + ", ".join(dict.fromkeys(C
 if CREDITS and len(MEDIA) > len(CREDITS): credit_txt += " ; Souss Actualités"
 if CFG.get("musique", "elan") != "aucune": credit_txt += ". Musique originale."
 if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else "")
+_intro_brand = Image.new("RGBA", (W, H), (0, 0, 0, 0)); _ib = ImageDraw.Draw(_intro_brand)
+_bf = arfont(110) if AR else font("Inter-Black.otf", 96)
+_bt = "أخبار سوس" if AR else "SOUSS ACTUALITÉS"
+T(_ib, ((W - tlen(_ib, _bt, _bf)) / 2, 840), _bt, _bf, (255, 255, 255, 255))
+_kt = CFG.get("rubrique") or ("أخبار" if AR else "Actualité")
+_kf = F_KICK if AR else font("Inter-SemiBold.otf", 38)
+_kt = _kt if AR else _kt.upper()
+T(_ib, ((W - tlen(_ib, _kt, _kf)) / 2, 985), _kt, _kf, ACCENT + (255,))
+def fade(img, a):
+    if a >= 1: return img
+    r_, g_, b_, al_ = img.split(); al_ = al_.point(lambda v: int(v * max(a, 0))); return Image.merge("RGBA", (r_, g_, b_, al_))
+def intro(fr, t):
+    out_a = 1 - ease((t - (INTRO - 0.45)) / 0.45)        # disparition à la fin de l'intro
+    ov = Image.new("RGBA", (W, H), (8, 8, 10, int(185 * out_a)))
+    fr = Image.alpha_composite(fr, ov)
+    dd = ImageDraw.Draw(fr)
+    bar = ease(t / 0.6) * 460                              # barre orange qui s'ouvre
+    if out_a > 0: dd.rectangle((W / 2 - bar / 2, 800, W / 2 + bar / 2, 812), fill=ACCENT + (int(255 * out_a),))
+    a_ = ease((t - 0.15) / 0.6) * out_a                    # logo qui apparaît en glissant
+    sh = int(40 * (1 - ease((t - 0.15) / 0.6)))
+    layer = fade(_intro_brand, a_)
+    if sh: layer = layer.transform(layer.size, Image.AFFINE, (1, 0, 0, 0, 1, -sh))
+    return Image.alpha_composite(fr, layer)
 def outro(fr, a):
     ov = Image.new("RGBA", (W, H), (10, 10, 12, int(235 * a))); dd = ImageDraw.Draw(ov); al = int(255 * a)
     dd.rectangle((W / 2 - 6, 760, W / 2 + 6, 840), fill=ACCENT + (al,))
     rows = [("أخبار سوس" if AR else "SOUSS ACTUALITÉS", arfont(84) if AR else font("Inter-Black.otf", 78), 870, (255, 255, 255)),
             ("souss-actualites.com", font("Inter-SemiBold.otf", 44), 1005 if AR else 990, ACCENT),
-            ((("عن مقال لـ " if mode != "complet" else "بقلم ") if AR else ("D’après un texte de " if mode != "complet" else "Un texte de ")) + BYLINE, F_KICK, 1095 if AR else 1080, (220, 220, 220))]
+            ((("عن مقال لـ " if mode != "complet" else "بقلم ") if AR else ("D’après un texte de " if mode != "complet" else "Un texte de ")) + BYLINE, F_KICK, 1095 if AR else 1080, (220, 220, 220)),
+            ("تابعونا  @soussactualites" if AR else "Abonnez-vous  @soussactualites", arfont(40) if AR else font("Inter-Bold.otf", 40), 1230, (255, 255, 255))]
+    _sw = tlen(dd, rows[-1][0], rows[-1][1]) + 70
+    dd.rounded_rectangle(((W - _sw) / 2, 1212, (W + _sw) / 2, 1298), radius=43, fill=ACCENT + (al,))
     for txt, f, yy, col in rows:
         T(dd, ((W - tlen(dd, txt, f)) / 2, yy), txt, f, col + (al,))
     yy = 1680
@@ -597,7 +662,8 @@ slug = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", TITLE.lower().re
 if slug == "video" or len(slug) < 6: slug = "souss-actualites-" + JOB.name
 VIDEO = OUT / f"{slug}.mp4"
 has_music = (OUT / "music.wav").exists()
-af = "[1:a]adelay=500|500,apad,aformat=channel_layouts=stereo:sample_rates=44100"
+_dl = int(INTRO * 1000)
+af = f"[1:a]adelay={_dl}|{_dl},apad,aformat=channel_layouts=stereo:sample_rates=44100"
 if has_music:
     af += ",asplit=2[v][sc];[2:a]volume=%s[m0];[m0][sc]sidechaincompress=threshold=0.03:ratio=4:attack=30:release=400[m];[v][m]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" % CFG.get("volume_musique", 0.30)
 else:
@@ -609,17 +675,24 @@ cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb2
 ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 ci, XF, cache = 0, 0.9, {}
 for f in range(NF):
-    t = f / FPS; tv = t - 0.5
+    t = f / FPS; tv = t - INTRO
     idx = min(int(t // per), len(seq) - 1); local = t - idx * per
     fr = src(idx).frame(min(max(local / per, 0), 1), idx)
     if idx + 1 < len(seq) and local > per - XF and Path(seq[idx + 1]).suffix.lower() not in VIDEXT:
         fr = Image.blend(fr, src(idx + 1).frame(0, idx + 1), (local - (per - XF)) / XF)
-    fr = Image.alpha_composite(fr.convert("RGBA"), static)
-    while ci < len(chunks) - 1 and tv > chunks[ci][1]: ci += 1
-    c = chunks[ci]
-    if c[0] - 0.05 <= tv <= c[1] + 0.3:
-        if c[2] not in cache: cache = {c[2]: text_layer(c[2])}
-        fr.alpha_composite(cache[c[2]], (0, 1300))
+    fr = fr.convert("RGBA")
+    if t < INTRO:
+        fr = intro(fr, t)
+        if t > INTRO - 0.45: fr = Image.alpha_composite(fr, fade(static, ease((t - (INTRO - 0.45)) / 0.45)))
+    else:
+        fr = Image.alpha_composite(fr, static)
+    while ci < len(chunks) - 1 and tv > chunks[ci + 1][0][0] - 0.02: ci += 1
+    c = chunks[ci] if chunks else None
+    if c and c[0][0] - 0.05 <= tv <= c[-1][1] + 0.6:
+        hi = max([k for k, w_ in enumerate(c) if w_[0] <= tv] or [0])
+        key = (ci, hi)
+        if key not in cache: cache = {key: text_layer([w_[2] for w_ in c], hi)}
+        fr.alpha_composite(cache[key], (0, 1300))
     dr = ImageDraw.Draw(fr)
     dr.rectangle((70, 1760, W - 70, 1766), fill=(85, 85, 85))
     dr.rectangle((70, 1760, 70 + (W - 140) * min(t / DUR, 1), 1766), fill=ACCENT)
