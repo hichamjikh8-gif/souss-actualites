@@ -178,18 +178,30 @@ $("sas-wp").onclick=async()=>{
   }catch(e){st.innerHTML='<span class="err">'+e.message+'</span>'}
 };
 let CURTAG="";
-async function delJob(tag){
+const DELETED=new Set();
+async function delJob(tag,ask=true){
   const id=tag.replace(/^job-/,"");
-  if(!confirm("Supprimer définitivement cette vidéo du studio ?\n(Elle reste sur YouTube/TikTok/WordPress si vous l’y avez déjà publiée.)"))return false;
+  if(ask&&!confirm("Supprimer cette vidéo du studio ?\n(Elle reste sur YouTube/TikTok/WordPress si vous l’y avez déjà publiée.)"))return false;
+  DELETED.add(tag);
   const rel=await gh("/releases/tags/"+tag);
   if(rel)await gh("/releases/"+rel.id,{method:"DELETE"});
   try{await gh("/git/refs/tags/"+tag,{method:"DELETE"})}catch(e){}
-  async function rm(path){const items=await gh("/contents/"+path+"?ref="+BRANCH);if(!items)return;
-    for(const it of (Array.isArray(items)?items:[items])){if(it.type=="dir")await rm(it.path);else await gh("/contents/"+it.path,{method:"DELETE",body:JSON.stringify({message:"Suppression "+id,sha:it.sha,branch:BRANCH})})}}
-  await rm("sorties/"+id);await rm("jobs/"+id);
-  return true;
+  // un seul commit pour retirer tous les fichiers du job
+  for(let essai=0;essai<4;essai++){
+    try{
+      const ref=await gh("/git/ref/heads/"+BRANCH),head=ref.object.sha;
+      const com=await gh("/git/commits/"+head);
+      const tree=await gh("/git/trees/"+com.tree.sha+"?recursive=1");
+      const paths=tree.tree.filter(x=>x.type=="blob"&&(x.path.startsWith("jobs/"+id+"/")||x.path.startsWith("sorties/"+id+"/"))).map(x=>x.path);
+      if(!paths.length)return true;
+      const nt=await gh("/git/trees",{method:"POST",body:JSON.stringify({base_tree:com.tree.sha,tree:paths.map(p=>({path:p,mode:"100644",type:"blob",sha:null}))})});
+      const nc=await gh("/git/commits",{method:"POST",body:JSON.stringify({message:"Suppression "+id+" [skip ci]",tree:nt.sha,parents:[head]})});
+      await gh("/git/refs/heads/"+BRANCH,{method:"PATCH",body:JSON.stringify({sha:nc.sha})});
+      return true;
+    }catch(e){if(essai==3)throw e;await new Promise(r=>setTimeout(r,1500))}
+  }
 }
-$("sas-del").onclick=async()=>{if(!CURTAG)return;try{if(await delJob(CURTAG)){$("sas-result").style.display="none";$("sas-prog").style.display="none";hist()}}catch(e){alert("Erreur : "+e.message)}};
+$("sas-del").onclick=async()=>{if(!CURTAG)return;try{$("sas-del").textContent="Suppression…";if(await delJob(CURTAG)){$("sas-del").textContent="🗑 Supprimer";$("sas-result").style.display="none";$("sas-prog").style.display="none";hist()}}catch(e){alert("Erreur : "+e.message)}};
 async function show(rel){CURTAG=rel.tag_name;
   $("sas-go").disabled=false;
   const mp4=rel.assets.find(a=>a.name.endsWith(".mp4"));const dsc=rel.assets.find(a=>a.name=="description.txt");
@@ -221,9 +233,9 @@ function pcPublish(url,name){
 $("sas-tt").onclick=()=>pcPublish("https://www.tiktok.com/tiktokstudio/upload","TikTok");
 $("sas-yt").onclick=()=>pcPublish("https://studio.youtube.com/","YouTube");
 $("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textContent).then(()=>{$("sas-copy").textContent="✔ Copié"})};
-async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=8");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return "• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")+' <a href="#" class="sas-x" data-d="'+r.tag_name+'" title="Supprimer" style="color:#ff6b6b;text-decoration:none">🗑</a>'}).join("<br>")||"Aucune vidéo pour l’instant.";
+async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=15");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")&&!DELETED.has(r.tag_name)).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return '<span>'+"• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")+' <a href="#" class="sas-x" data-d="'+r.tag_name+'" title="Supprimer" style="color:#ff6b6b;text-decoration:none">🗑</a></span>'}).join("<br>")||"Aucune vidéo pour l’instant.";
   document.querySelectorAll("#sas-hist a[data-t]").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))});
-  document.querySelectorAll("#sas-hist a.sas-x").forEach(a=>a.onclick=async e=>{e.preventDefault();try{if(await delJob(a.dataset.d)){if(CURTAG==a.dataset.d)$("sas-result").style.display="none";hist()}}catch(err){alert("Erreur : "+err.message)}})}catch(e){$("sas-hist").textContent="Clé GitHub invalide ? "+e.message}}
+  document.querySelectorAll("#sas-hist a.sas-x").forEach(a=>a.onclick=async e=>{e.preventDefault();if(!confirm("Supprimer cette vidéo du studio ?"))return;const row=a.parentElement;a.outerHTML='<span class="muted"> suppression…</span>';try{await delJob(a.dataset.d,false);if(CURTAG==a.dataset.d)$("sas-result").style.display="none";hist()}catch(err){alert("Erreur : "+err.message);hist()}})}catch(e){$("sas-hist").textContent="Clé GitHub invalide ? "+e.message}}
 $("sas-reload").onclick=e=>{e.preventDefault();hist()};
 hist();
 })();
