@@ -636,7 +636,9 @@ _mc = OUT / "music.wav.credit"
 if CFG.get("musique", "elan") != "aucune": credit_txt += (". " + _mc.read_text() if _mc.exists() else ". Musique originale.")
 if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + (("، " + _mc.read_text()) if _mc.exists() else ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else ""))
 # ---- Chiffres clés animés
-STOPU = {"de", "du", "des", "d'", "et", "à", "au", "en", "le", "la", "les", "un", "une", "sur", "pour", "و", "في", "من", "على"}
+STOPU = {"de", "du", "des", "d'", "et", "à", "au", "aux", "en", "le", "la", "les", "un", "une", "sur", "pour", "par", "est", "sont", "a",
+         "qui", "que", "où", "dans", "avec", "il", "elle", "ce", "cette", "ne", "n'est", "se", "sa", "son", "ses", "plus",
+         "و", "في", "من", "على", "إلى", "عن", "أن", "التي", "الذي", "هذا", "هذه", "مع"}
 FIGS, _last = [], -99
 _allw = [w_ for sg in segs[1:] for w_ in sg["words"]]
 _i = 0
@@ -644,16 +646,17 @@ while _i < len(_allw):
     w0 = _allw[_i]
     if re.search(r"\d", w0[2]):
         j = _i; num = []
-        while j < len(_allw) and re.fullmatch(r"[\d.,\u00a0\u202f%ᵉe]+|\d+(er|e|ème)?", _allw[j][2].strip(".,;:")):
+        while j < len(_allw) and re.fullmatch(r"[\d.,\u00a0\u202f %ᵉe]+|\d+(er|e|ème)?", _allw[j][2].strip(".,;:")):
             num.append(_allw[j][2].strip(",;:")); j += 1
         unit = []
-        while j < len(_allw) and len(unit) < 3 and not re.search(r"\d", _allw[j][2]):
-            wd = _allw[j][2]; unit.append(wd.strip(".,;:!?؟،")); j += 1
+        while j < len(_allw) and len(unit) < 2 and not re.search(r"\d", _allw[j][2]):
+            wd = _allw[j][2]; wl = wd.strip(".,;:!?؟،").lower()
+            if wl in STOPU or "'" in wl or "’" in wl: break
+            unit.append(wd.strip(".,;:!?؟،")); j += 1
             if re.search(r"[.,;:!?؟،]$", wd): break
-        while unit and unit[-1].lower() in STOPU: unit.pop()
         val = " ".join(num).strip(".")
         is_year = re.fullmatch(r"(19|20)\d\d", val) is not None
-        if val and not (is_year and not unit) and w0[0] - _last > 3.5:
+        if val and not is_year and val not in [f_[1] for f_ in FIGS] and w0[0] - _last > 3.5:
             FIGS.append((w0[0], val, " ".join(unit[:3]))); _last = w0[0]
         _i = max(j, _i + 1)
     else:
