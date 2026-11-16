@@ -73,6 +73,18 @@ jobs:
           PY
             gh release create "job-$ID" $D/*.mp4 $D/miniature.jpg $D/description.txt $D/result.json $(ls $D/miniature_youtube.jpg 2>/dev/null) \
               --target videos --title "Vidéo $ID" --notes-file $D/description.txt --prerelease
+          fi
+          # Retour vers Telegram si la demande vient du bot
+          python3 - "${{ steps.job.outputs.dir }}" <<'PY'
+          import json, glob, os, sys, requests
+          d = sys.argv[1]; job = json.load(open(d + "/job.json")); cb = job.get("callback")
+          if cb:
+              vids = glob.glob(d + "/out/*.mp4"); desc = ""
+              if os.path.exists(d + "/out/description.txt"): desc = open(d + "/out/description.txt", encoding="utf-8").read()
+              r = requests.post(cb["url"], json={"id": cb["id"], "key": cb["key"], "video": os.path.basename(vids[0]) if vids else "", "description": desc}, timeout=180)
+              print("retour Telegram:", r.status_code)
+          PY
+          if ls $D/*.mp4 >/dev/null 2>&1; then :
           else
             echo '{"error":"La vidéo n a pas pu être créée. Voir le journal GitHub Actions."}' > /tmp/error.json
             gh release create "job-$ID" /tmp/error.json --target videos --title "Erreur $ID" --notes "Échec" --prerelease
