@@ -200,7 +200,7 @@ function pcPublish(url,name){
   copyText();
   const a=document.createElement("a");a.href=URL.createObjectURL(CUR.blob);a.download=CUR.name||"video.mp4";document.body.appendChild(a);a.click();a.remove();
   window.open(url,"_blank");
-  $("sas-pubst").innerHTML="✅ Vidéo téléchargée et texte copié. Dans "+name+" : glissez la vidéo depuis vos <b>Téléchargements</b> (icône ⬇ en haut à droite de Chrome) dans la page, puis collez le texte (Ctrl+V).";
+  $("sas-pubst").innerHTML="✅ Vidéo téléchargée et texte copié.<br>Dans "+name+" : <b>1)</b> cliquez sur « Sélectionner » / « Importer » · <b>2)</b> ouvrez <b>Téléchargements</b> et double-cliquez sur la <b>première vidéo</b> · <b>3)</b> collez le texte (Ctrl+V) et publiez.";
 }
 $("sas-tt").onclick=()=>pcPublish("https://www.tiktok.com/tiktokstudio/upload","TikTok");
 $("sas-yt").onclick=()=>pcPublish("https://studio.youtube.com/","YouTube");
