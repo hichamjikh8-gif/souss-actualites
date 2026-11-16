@@ -1,0 +1,42 @@
+{
+ "mozart_nachtmusik": {
+  "artist": "Wolfgang Amadeus Mozart (1756–1791). The website l",
+  "licence": "Public domain",
+  "source": "File:Mozart K525 Serenade in G Major 1 - Allegro.ogg"
+ },
+ "mozart_romance": {
+  "artist": "Wolfgang Amadeus Mozart (1756–1791). The website l",
+  "licence": "Public domain",
+  "source": "File:Mozart K525 Serenade in G Major 2 - Romance.ogg"
+ },
+ "mozart_piano": {
+  "artist": "Bernd Krueger",
+  "licence": "CC BY-SA 3.0 de",
+  "source": "File:Mozart - Piano Sonata No. 16 in C major - II. Andante.ogg"
+ },
+ "mozart_concerto": {
+  "artist": "Wolfgang Amadeus Mozart",
+  "licence": "Public domain",
+  "source": "File:Mozart; Concerto No. 25 in C- II. Andante.ogg"
+ },
+ "beethoven_lune": {
+  "artist": "Ludwig van Beethoven",
+  "licence": "Public domain",
+  "source": "File:Ludwig van Beethoven - sonata no. 14 in c sharp minor 'moonlight', op. 27 no. 2 - i. adagio sostenuto.ogg"
+ },
+ "vivaldi_printemps": {
+  "artist": "The Modena Chamber Orchestra",
+  "licence": "PDM-owner",
+  "source": "File:The Modena Chamber Orchestra - Vivaldi's Spring, RV 269 - I. Allegro.ogg"
+ },
+ "chopin_nocturne": {
+  "artist": "Peter Johnston",
+  "licence": "CC0",
+  "source": "File:Chopin Nocturne No. 2 in E Flat Major, Op. 9.ogg"
+ },
+ "bach_air": {
+  "artist": "",
+  "licence": "Public domain",
+  "source": "File:Air (Bach).ogg"
+ }
+}
