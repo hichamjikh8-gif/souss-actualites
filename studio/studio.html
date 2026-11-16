@@ -106,6 +106,16 @@
   </div>
 </div>
 
+<div class="card" style="margin-top:16px">
+  <b>📱 Bot Telegram « Souss Studio »</b> <span class="muted" id="sas-tgst"></span>
+  <div id="sas-tgbox">
+    <label>Clé du bot (donnée par BotFather)</label>
+    <input type="password" id="sas-tgtok" placeholder="123456789:AA…">
+    <button class="btn" id="sas-tgsave" style="background:#e6781e;border-color:#e6781e">Connecter le bot</button>
+    <p class="muted">La clé GitHub déjà enregistrée dans ce studio est utilisée automatiquement.</p>
+  </div>
+</div>
+
 <div class="card hist" style="margin-top:16px">
   <b>Dernières vidéos</b> <span class="muted">(<a href="#" id="sas-reload">actualiser</a> · <a href="#" id="sas-resettok">changer la clé</a>)</span>
   <div id="sas-hist" class="muted" style="margin-top:8px">…</div>
@@ -241,6 +251,15 @@ $("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textConte
 async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=15");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")&&!DELETED.has(r.tag_name)).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return '<span>'+"• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")+' <a href="#" class="sas-x" data-d="'+r.tag_name+'" title="Supprimer" style="color:#ff6b6b;text-decoration:none">🗑</a></span>'}).join("<br>")||"Aucune vidéo pour l’instant.";
   document.querySelectorAll("#sas-hist a[data-t]").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))});
   document.querySelectorAll("#sas-hist a.sas-x").forEach(a=>a.onclick=async e=>{e.preventDefault();if(!confirm("Supprimer cette vidéo du studio ?"))return;const row=a.parentElement;a.outerHTML='<span class="muted"> suppression…</span>';try{await delJob(a.dataset.d,false);if(CURTAG==a.dataset.d)$("sas-result").style.display="none";hist()}catch(err){alert("Erreur : "+err.message);hist()}})}catch(e){$("sas-hist").textContent="Clé GitHub invalide ? "+e.message}}
+async function tgPage(){const r=await fetch("/wp-admin/options-general.php?page=sst-telegram",{credentials:"include"});return await r.text()}
+async function tgStatus(){try{const h=await tgPage();const bot=(h.match(/Bot : <strong>([^<]+)</)||[])[1]||"";const linked=/relié ✅/.test(h);const code=(h.match(/\/start ([A-Z0-9]+)/)||[])[1]||"";
+  if(bot&&bot!="non connecté"){$("sas-tgbox").style.display="none";$("sas-tgst").innerHTML="— "+bot+(linked?" · téléphone relié ✅":" · envoyez au bot : <b>/start "+code+"</b>")}}catch(e){}}
+$("sas-tgsave").onclick=async()=>{const tok=$("sas-tgtok").value.trim();if(!tok)return alert("Collez la clé du bot.");
+  try{const h=await tgPage();const nonce=(h.match(/name="_wpnonce" value="([^"]+)"/)||[])[1];if(!nonce)throw new Error("connectez-vous à WordPress");
+  const fd=new FormData();fd.append("_wpnonce",nonce);fd.append("_wp_http_referer","/wp-admin/options-general.php?page=sst-telegram");fd.append("sst_bot_token",tok);fd.append("sst_github_token",TOKEN||"");fd.append("sst_save","1");
+  const r=await fetch("/wp-admin/options-general.php?page=sst-telegram",{method:"POST",body:fd,credentials:"include"});const out=await r.text();
+  $("sas-tgtok").value="";if(/✅ Enregistré/.test(out)){await tgStatus()}else{alert("La clé du bot ne marche pas. Vérifiez-la dans BotFather.")}}catch(e){alert("Erreur : "+e.message)}};
+tgStatus();
 $("sas-reload").onclick=e=>{e.preventDefault();hist()};
 hist();
 })();
