@@ -48,7 +48,11 @@ def from_url(url):
     except Exception:
         pass
     imgs += re.findall(r'<img[^>]+src="([^"]+)"', content)
-    global WP_CATS
+    global WP_CATS, WP_AUTHOR
+    try:
+        WP_AUTHOR = clean(post["_embedded"]["author"][0]["name"])
+    except Exception:
+        WP_AUTHOR = ""
     try:
         WP_CATS = [clean(t["name"]) for t in post["_embedded"]["wp:term"][0]]
     except Exception:
@@ -65,7 +69,7 @@ def paragraphs(content_html):
         out.append(t)
     return out
 
-WP_CATS = []
+WP_CATS, WP_AUTHOR = [], ""
 if CFG.get("url"):
     TITLE, CONTENT, ARTICLE_IMGS = from_url(CFG["url"].strip())
     PARAS = paragraphs(CONTENT)
@@ -87,7 +91,14 @@ if _letters and sum(c.isupper() for c in _letters) / len(_letters) > 0.7:
               "Akhannouch", "Sahara", "Dakhla", "Laâyoune", "Guelmim", "Ouarzazate", "Qatar"]
     for w in PROPER:
         TITLE = re.sub(r"\b" + w.lower() + r"\b", w, TITLE)
-BYLINE = CFG.get("byline") or "Hicham Jikh Cheddad"
+_sample = TITLE + " " + " ".join(PARAS[:5])
+_ar = len(re.findall(r"[\u0600-\u06FF]", _sample)); _lat = len(re.findall(r"[A-Za-zÀ-ÿ]", _sample))
+LANG = CFG.get("langue", "auto")
+if LANG not in ("fr", "ar"): LANG = "ar" if _ar > _lat else "fr"
+AR = LANG == "ar"
+log("Langue:", LANG)
+BYLINE = WP_AUTHOR or CFG.get("byline") or "Hicham Jikh Cheddad"
+if AR and BYLINE.strip().lower() in ("hicham jikh cheddad", "hicham jikh"): BYLINE = "هشام جيخ شداد"
 if (not CFG.get("rubrique") or CFG.get("rubrique", "").strip().lower() in ("actualité", "actualité · agadir")) and WP_CATS:
     CFG["rubrique"] = WP_CATS[0]
 log("Rubrique:", CFG.get("rubrique"), "| catégories WP:", WP_CATS)
@@ -95,6 +106,9 @@ log("Titre:", TITLE, "| paragraphes:", len(PARAS), "| images article:", len(ARTI
 
 # ------------------------------------------------------------------ 2. script
 def sentences(text):
+    if re.search(r"[\u0600-\u06FF]", text):
+        s = re.split(r"(?<=[.!?…؟])\s+", text)
+        return [x.strip() for x in s if len(x.strip()) > 1]
     s = re.split(r"(?<=[.!?…»])\s+(?=[A-ZÀ-ÖØ-Ý«\"0-9])", text)
     return [x.strip() for x in s if len(x.strip()) > 1]
 
@@ -143,7 +157,7 @@ else:
                 if len(s.split()) < 4 and i > 0: continue
                 LINES.append(s); words += len(s.split())
         log("Résumé extractif:", words, "mots")
-LINES = [TITLE + "."] + [l for l in LINES if l.strip() and l.strip().rstrip(".…") != TITLE and not (mode != "complet" and re.search(r"[\u1E00-\u1EFF\u2D30-\u2D7F\u0600-\u06FF]", l))]
+LINES = [TITLE + ("" if AR else ".")] + [l for l in LINES if l.strip() and l.strip().rstrip(".…") != TITLE and not (mode != "complet" and re.search(r"[\u1E00-\u1EFF\u2D30-\u2D7F]" if AR else r"[\u1E00-\u1EFF\u2D30-\u2D7F\u0600-\u06FF]", l))]
 
 # --- prononciation
 from num2words import num2words
@@ -155,7 +169,12 @@ FIX = {
     r"\bAït\b": "Aït", r"\bOufella\b": "Oufella", r"\bGadiris\b": "Gadiris",
 }
 FIX.update(CFG.get("prononciation", {}))
+def spoken_ar(s):
+    t = re.sub(r"\d+(?:[.,]\d+)?", lambda m: num2words(float(m.group(0).replace(",", ".")) if re.search(r"[.,]", m.group(0)) else int(m.group(0)), lang="ar"), s)
+    t = t.replace("«", "").replace("»", "").replace("…", "،").replace("—", "،").replace("–", "،")
+    return re.sub(r"\s+", " ", t).strip()
 def spoken(s):
+    if AR: return spoken_ar(s)
     t = s
     for a, b in FIX.items(): t = re.sub(a, b, t)
     t = re.sub(r"(\d+)\s*(?:ᵉ|e|ème|eme)\b", lambda m: num2words(int(m.group(1)), lang="fr", to="ordinal"), t)
@@ -171,17 +190,28 @@ def spoken(s):
 
 # ------------------------------------------------------------------ 3. voix (Kokoro)
 import numpy as np, soundfile as sf
-from kokoro_onnx import Kokoro
 KD = os.environ.get("KOKORO_DIR", str(HERE / "models"))
-kok = Kokoro(f"{KD}/kokoro-v1.0.onnx", f"{KD}/voices-v1.0.bin")
 speed = float(CFG.get("vitesse", 1.05))
+if AR:
+    import wave, io
+    from piper import PiperVoice
+    from piper.config import SynthesisConfig
+    pv = PiperVoice.load(f"{KD}/ar_JO-kareem-medium.onnx")
+    def say(txt):
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            pv.synthesize_wav(txt, wf, syn_config=SynthesisConfig(length_scale=1.0 / speed))
+        buf.seek(0); a, r = sf.read(buf, dtype="float32"); return a, r
+else:
+    from kokoro_onnx import Kokoro
+    kok = Kokoro(f"{KD}/kokoro-v1.0.onnx", f"{KD}/voices-v1.0.bin")
+    def say(txt):
+        if "(en)" in kok.tokenizer.phonemize(txt, "fr-fr"): log("Attention prononciation anglaise:", txt)
+        return kok.create(txt, voice=CFG.get("voix", "ff_siwis"), speed=speed, lang="fr-fr")
 segs, audio, t, sr = [], [], 0.0, 24000
 for line in LINES:
     sp = spoken(line)
-    ph = kok.tokenizer.phonemize(sp, "fr-fr")
-    if "(en)" in ph:
-        log("Attention prononciation anglaise:", sp)
-    a, sr = kok.create(sp, voice=CFG.get("voix", "ff_siwis"), speed=speed, lang="fr-fr")
+    a, sr = say(sp)
     gap = np.zeros(int(sr * 0.32), dtype=a.dtype)
     segs.append({"text": line, "start": t, "end": t + len(a) / sr})
     t += len(a) / sr + 0.32; audio += [a, gap]
@@ -385,6 +415,31 @@ def font(n, s, w=None):
 F_BRAND, F_KICK = font("Inter-Black.otf", 46), font("Inter-SemiBold.otf", 30)
 F_TITLE, F_SUB = font("Lora-Variable.ttf", 54, 700), font("Inter-Bold.otf", 60)
 F_URL, F_SMALL = font("Inter-SemiBold.otf", 32), font("Inter-Medium.otf", 24)
+from PIL import features
+RAQM = features.check("raqm")
+def arfont(size, naskh=False):
+    import glob
+    pats = ["/usr/share/fonts/truetype/noto/NotoNaskhArabic-Bold.ttf"] if naskh else []
+    pats += ["/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf", "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf"]
+    pats += glob.glob("/usr/share/fonts/**/*Arabic*Bold*.ttf", recursive=True)
+    for p_ in pats:
+        if os.path.exists(p_):
+            return ImageFont.truetype(p_, size, layout_engine=ImageFont.Layout.RAQM if RAQM else ImageFont.Layout.BASIC)
+    raise SystemExit("Police arabe introuvable")
+def shape(txt):
+    if RAQM or not re.search(r"[\u0600-\u06FF]", txt): return txt
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    return get_display(arabic_reshaper.reshape(txt))
+def tlen(d_, txt, f):
+    return d_.textlength(shape(txt), font=f, direction="rtl") if (RAQM and re.search(r"[\u0600-\u06FF]", txt)) else d_.textlength(shape(txt), font=f)
+def T(d_, xy, txt, f, fill):
+    if RAQM and re.search(r"[\u0600-\u06FF]", txt): d_.text(xy, txt, font=f, fill=fill, direction="rtl", language="ar")
+    else: d_.text(xy, shape(txt), font=f, fill=fill)
+if AR:
+    F_BRAND, F_KICK, F_TITLE, F_SUB = arfont(52), arfont(32), arfont(56, True), arfont(62)
+    F_SMALL = arfont(26)
+log("Moteur texte RAQM:", RAQM)
 TITLE_SHOW = TITLE.replace("ᵉ", "e")
 OUTRO = 3.5
 DUR = VOICE_DUR + 0.5 + OUTRO
@@ -407,11 +462,11 @@ def text_layer(txt):
     lay = Image.new("RGBA", (W, 360), (0, 0, 0, 0)); d = ImageDraw.Draw(lay)
     lines = textwrap.wrap(txt, 26)
     if len(lines) > 1 and len(lines[-1]) < 10: lines = textwrap.wrap(txt, max(14, len(txt) // len(lines) + 4))
-    lh = 76; y0 = (360 - lh * len(lines)) // 2
+    lh = 90 if AR else 76; y0 = (360 - lh * len(lines)) // 2
     for i, l in enumerate(lines):
-        w = d.textlength(l, font=F_SUB); x = (W - w) / 2; y = y0 + i * lh
-        for dx, dy in ((0, 4), (2, 4), (-2, 4)): d.text((x + dx, y + dy), l, font=F_SUB, fill=(0, 0, 0, 160))
-        d.text((x, y), l, font=F_SUB, fill="white")
+        w = tlen(d, l, F_SUB); x = (W - w) / 2; y = y0 + i * lh
+        for dx, dy in ((0, 4), (2, 4), (-2, 4)): T(d, (x + dx, y + dy), l, F_SUB, (0, 0, 0, 160))
+        T(d, (x, y), l, F_SUB, "white")
     return lay
 
 PH_W, PH_H, PH_Y = 1080, 640, 600
@@ -482,12 +537,19 @@ def src(i):
     return sources[i]
 
 static = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(static)
-d.rectangle((70, 150, 82, 222), fill=ACCENT)
-d.text((104, 148), "SOUSS ACTUALITÉS", font=F_BRAND, fill="white")
-d.text((106, 202), CFG.get("rubrique", "ACTUALITÉ").upper(), font=F_KICK, fill=ACCENT)
-y = 300
-tl = textwrap.wrap(TITLE_SHOW, 30)[:4]
-for l in tl: d.text((70, y), l, font=F_TITLE, fill="white"); y += 70
+if AR:
+    d.rectangle((W - 82, 150, W - 70, 222), fill=ACCENT)
+    b = "أخبار سوس"; T(d, (W - 104 - tlen(d, b, F_BRAND), 140), b, F_BRAND, "white")
+    k = CFG.get("rubrique") or "أخبار"; T(d, (W - 106 - tlen(d, k, F_KICK), 205), k, F_KICK, ACCENT)
+    y = 290
+    for l in textwrap.wrap(TITLE_SHOW, 32)[:4]: T(d, (W - 70 - tlen(d, l, F_TITLE), y), l, F_TITLE, "white"); y += 76
+else:
+    d.rectangle((70, 150, 82, 222), fill=ACCENT)
+    d.text((104, 148), "SOUSS ACTUALITÉS", font=F_BRAND, fill="white")
+    d.text((106, 202), CFG.get("rubrique", "ACTUALITÉ").upper(), font=F_KICK, fill=ACCENT)
+    y = 300
+    tl = textwrap.wrap(TITLE_SHOW, 30)[:4]
+    for l in tl: d.text((70, y), l, font=F_TITLE, fill="white"); y += 70
 d.rectangle((0, PH_Y - 6, W, PH_Y), fill=ACCENT)
 url = "souss-actualites.com"; d.text(((W - d.textlength(url, font=F_URL)) / 2, 1790), url, font=F_URL, fill=(235, 235, 235))
 
@@ -495,20 +557,23 @@ CREDITS = [c for c in CREDITS if c]
 credit_txt = "Photos : " + ("Wikimedia Commons — " + ", ".join(dict.fromkeys(CREDITS)) if CREDITS else "Souss Actualités")
 if CREDITS and len(MEDIA) > len(CREDITS): credit_txt += " ; Souss Actualités"
 if CFG.get("musique", "elan") != "aucune": credit_txt += ". Musique originale."
+if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + (" — موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else "")
 def outro(fr, a):
     ov = Image.new("RGBA", (W, H), (10, 10, 12, int(235 * a))); dd = ImageDraw.Draw(ov); al = int(255 * a)
     dd.rectangle((W / 2 - 6, 760, W / 2 + 6, 840), fill=ACCENT + (al,))
-    for txt, f, yy, col in [("SOUSS ACTUALITÉS", font("Inter-Black.otf", 78), 880, (255, 255, 255)),
-                            ("souss-actualites.com", font("Inter-SemiBold.otf", 44), 990, ACCENT),
-                            (("D’après un texte de " if mode != "complet" else "Un texte de ") + BYLINE, F_KICK, 1080, (220, 220, 220))]:
-        dd.text(((W - dd.textlength(txt, font=f)) / 2, yy), txt, font=f, fill=col + (al,))
+    rows = [("أخبار سوس" if AR else "SOUSS ACTUALITÉS", arfont(84) if AR else font("Inter-Black.otf", 78), 870, (255, 255, 255)),
+            ("souss-actualites.com", font("Inter-SemiBold.otf", 44), 990, ACCENT),
+            ((("عن مقال لـ " if mode != "complet" else "بقلم ") if AR else ("D’après un texte de " if mode != "complet" else "Un texte de ")) + BYLINE, F_KICK, 1080, (220, 220, 220))]
+    for txt, f, yy, col in rows:
+        T(dd, ((W - tlen(dd, txt, f)) / 2, yy), txt, f, col + (al,))
     yy = 1680
     for l in textwrap.wrap(credit_txt, 72)[:5]:
-        dd.text(((W - dd.textlength(l, font=F_SMALL)) / 2, yy), l, font=F_SMALL, fill=(170, 170, 170, al)); yy += 32
+        T(dd, ((W - tlen(dd, l, F_SMALL)) / 2, yy), l, F_SMALL, (170, 170, 170, al)); yy += 34
     return Image.alpha_composite(fr, ov)
 
 import unicodedata
 slug = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", TITLE.lower().replace("œ", "oe").replace("æ", "ae")).encode("ascii", "ignore").decode())[:60].strip("-") or "video"
+if slug == "video" or len(slug) < 6: slug = "souss-actualites-" + JOB.name
 VIDEO = OUT / f"{slug}.mp4"
 has_music = (OUT / "music.wav").exists()
 af = "[1:a]adelay=500|500,apad,aformat=channel_layouts=stereo:sample_rates=44100"
@@ -545,8 +610,8 @@ subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "2", "-i", str(VIDE
 # ------------------------------------------------------------------ 7. textes réseaux sociaux
 art_url = CFG.get("url", "souss-actualites.com")
 desc = (SOCIAL or {}).get("description") or (LINES[1] if len(LINES) > 1 else TITLE)
-tags = (SOCIAL or {}).get("hashtags") or ["#SoussActualités", "#Maroc", "#Agadir", "#SoussMassa", "#Actualité"]
-social = f"{TITLE}\n\n{desc}\n\nL'article complet : {art_url}\n\n{' '.join(tags)}"
+tags = (SOCIAL or {}).get("hashtags") or (["#أخبار_سوس", "#المغرب", "#أكادير", "#سوس_ماسة", "#SoussActualités"] if AR else ["#SoussActualités", "#Maroc", "#Agadir", "#SoussMassa", "#Actualité"])
+social = f"{TITLE}\n\n{desc}\n\n{'المقال كاملاً' if AR else 'L' + chr(39) + 'article complet'} : {urllib.parse.unquote(art_url)}\n\n{' '.join(tags)}"
 (OUT / "description.txt").write_text(social, encoding="utf-8")
 json.dump({"video": VIDEO.name, "title": TITLE, "duration": round(DUR, 1), "description": social, "log": LOG},
           open(OUT / "result.json", "w"), ensure_ascii=False, indent=1)

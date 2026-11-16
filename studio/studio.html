@@ -52,6 +52,7 @@
   </div>
   <div class="row">
     <div><label>Format</label><select id="sas-mode"><option value="resume">Résumé (≈ 1 minute)</option><option value="complet">Article complet</option></select></div>
+    <div><label>Langue de la voix</label><select id="sas-lang"><option value="auto">Automatique</option><option value="fr">Français</option><option value="ar">العربية (arabe)</option></select></div>
     <div><label>Musique</label><select id="sas-music"><option value="elan">Élan (dynamique)</option><option value="calme">Calme (piano doux)</option><option value="dramatique">Dramatique</option><option value="aucune">Sans musique</option></select></div>
   </div>
   <div class="row">
@@ -129,7 +130,7 @@ async function put(path,contentB64,msg){return gh("/contents/"+path,{method:"PUT
 function step(txt,pct,det){$("sas-prog").style.display="block";$("sas-step").textContent=txt;$("sas-pbar").style.width=pct+"%";$("sas-det").innerHTML=det||""}
 $("sas-go").onclick=async()=>{
   if(!TOKEN){$("sas-setup").style.display="block";return}
-  const job={mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
+  const job={langue:$("sas-lang").value,mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
   if(!files.length){$("sas-drop").scrollIntoView({block:"center"});$("sas-drop").style.borderColor="#ff6b6b";return alert("Ajoutez vos photos (5 conseillées).")}
   if(mode=="url"){job.url=$("sas-url").value.trim();if(!job.url)return alert("Collez le lien de l’article.")}
   else{job.text=$("sas-text").value.trim();job.title=$("sas-title").value.trim();if(!job.text)return alert("Collez le texte de l’article.")}
@@ -195,7 +196,7 @@ async function show(rel){CURTAG=rel.tag_name;
   step("Terminé ✅",100);
   $("sas-result").style.display="block";
   $("sas-dl").href=mp4.browser_download_url;
-  const m=(rel.body||"").match(/L'article complet : (\S+)/);CUR={blob:null,name:mp4.name,url:(m&&m[1].startsWith("http"))?m[1]:""};$("sas-wpst").textContent="";
+  const m=(rel.body||"").match(/(?:L'article complet|المقال كاملاً) : (\S+)/);CUR={blob:null,name:mp4.name,url:(m&&m[1].startsWith("http"))?m[1]:""};$("sas-wpst").textContent="";
   try{const rawu="https://raw.githubusercontent.com/"+OWNER+"/"+REPO+"/"+BRANCH+"/sorties/"+rel.tag_name.replace(/^job-/,"")+"/"+mp4.name;const rr=await fetch(rawu);if(!rr.ok)throw new Error("raw "+rr.status);const blob=await rr.blob();CUR.blob=blob;$("sas-video").src=URL.createObjectURL(blob);
       $("sas-dl").href=URL.createObjectURL(blob);$("sas-dl").download=mp4.name}catch(e){$("sas-video").src=mp4.browser_download_url}
   $("sas-desc").textContent=rel.body||"";
