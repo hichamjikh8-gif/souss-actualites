@@ -157,6 +157,7 @@ $("sas-wp").onclick=async()=>{
     if(raw.includes("sas-studio-video"))throw new Error("cet article contient déjà une vidéo du studio");
     if(!confirm("Ajouter la vidéo en haut de l’article :\n« "+post.title.raw+" » ?"))return;
     if(!CUR.blob)throw new Error("vidéo pas encore chargée");
+    if(CUR.blob.size>16e6)throw new Error("vidéo trop lourde pour WordPress (max 16 Mo) : choisissez le format Résumé");
     st.textContent="Envoi de la vidéo vers WordPress…";
     const up=await fetch("/wp-json/wp/v2/media",{method:"POST",credentials:"include",headers:Object.assign({"Content-Type":"video/mp4","Content-Disposition":'attachment; filename="'+CUR.name+'"'},H),body:CUR.blob});
     if(!up.ok)throw new Error("envoi refusé ("+up.status+") : "+(await up.text()).slice(0,150));

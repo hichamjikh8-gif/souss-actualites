@@ -431,7 +431,7 @@ else:
     af += "[a]"
 cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
        "-i", str(OUT / "voice.wav")] + (["-i", str(OUT / "music.wav")] if has_music else []) + [
-       "-filter_complex", af, "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+       "-filter_complex", af, "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-maxrate", "2M", "-bufsize", "4M",
        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", str(VIDEO)]
 ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 ci, XF, cache = 0, 0.7, {}
