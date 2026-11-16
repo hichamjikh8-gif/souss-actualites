@@ -310,14 +310,20 @@ def topic_queries():
         return SOCIAL["keywords_images"]
     head = (TITLE + " " + " ".join(PARAS[:4])).lower()
     found = []
-    for k in sorted(KEYMAP, key=len, reverse=True):
-        if re.search(r"\b" + re.escape(k) + r"s?\b", head) and KEYMAP[k] not in found:
-            found.append(KEYMAP[k])
+    tl = TITLE.lower()
+    def pos(k):
+        m = re.search(r"\b" + re.escape(k) + r"s?\b", tl)
+        if m: return m.start()
+        m = re.search(r"\b" + re.escape(k) + r"s?\b", head)
+        return 1000 + m.start() if m else None
+    hits = sorted((pos(k), k) for k in KEYMAP if pos(k) is not None)
+    for _, k in hits:
+        if KEYMAP[k] not in found: found.append(KEYMAP[k])
     title_words = [w for w in re.findall(r"[a-zà-ÿ]{5,}", TITLE.lower()) if w not in STOP]
     qs = []
     if len(found) >= 2: qs.append(found[0] + " " + found[1])
     qs += found[:5]
-    qs += [w for w in title_words if w not in KEYMAP][:2]
+    if len(found) < 2: qs += [w for w in title_words if w not in KEYMAP][:2]
     places = [k for k in CATS if k in head and k != "maroc"]
     return qs, places
 def commons_search(q, limit):
@@ -335,6 +341,8 @@ def commons_search(q, limit):
         desc = (pg["title"] + " " + re.sub(r"<[^>]+>", " ", md.get("ImageDescription", {}).get("value", ""))).lower()
         if ii["width"] < 1400 or ii["width"] < ii["height"] * 1.3: continue
         if not re.search(r"cc|public domain|pd", lic, re.I) or re.search(BAD, desc): continue
+        words = [w for w in re.findall(r"[a-zà-ÿ]{4,}", q.lower())]
+        if words and not any(w in desc for w in words): continue
         artist = re.sub(r"<[^>]+>", "", md.get("Artist", {}).get("value", "")).strip()[:40]
         out.append((ii["thumburl"], f"{artist} ({lic})"))
         if len(out) >= limit: break
