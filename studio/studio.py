@@ -159,7 +159,7 @@ else:
             if not ss: continue
             take = ss[:2] if i < 2 else ss[:1]
             for s in take:
-                if words > int(CFG.get("words", 95 if AR else 150)): break
+                if words > int(CFG.get("words", 70 if AR else 150)): break
                 if len(s.split()) < 4 and i > 0: continue
                 LINES.append(s); words += len(s.split())
         log("Résumé extractif:", words, "mots")
