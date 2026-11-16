@@ -48,6 +48,11 @@ def from_url(url):
     except Exception:
         pass
     imgs += re.findall(r'<img[^>]+src="([^"]+)"', content)
+    global WP_CATS
+    try:
+        WP_CATS = [clean(t["name"]) for t in post["_embedded"]["wp:term"][0]]
+    except Exception:
+        WP_CATS = []
     return title, content, imgs
 
 def paragraphs(content_html):
@@ -60,6 +65,7 @@ def paragraphs(content_html):
         out.append(t)
     return out
 
+WP_CATS = []
 if CFG.get("url"):
     TITLE, CONTENT, ARTICLE_IMGS = from_url(CFG["url"].strip())
     PARAS = paragraphs(CONTENT)
@@ -82,6 +88,9 @@ if _letters and sum(c.isupper() for c in _letters) / len(_letters) > 0.7:
     for w in PROPER:
         TITLE = re.sub(r"\b" + w.lower() + r"\b", w, TITLE)
 BYLINE = CFG.get("byline") or "Hicham Jikh Cheddad"
+if (not CFG.get("rubrique") or CFG.get("rubrique", "").strip().lower() in ("actualité", "actualité · agadir")) and WP_CATS:
+    CFG["rubrique"] = WP_CATS[0]
+log("Rubrique:", CFG.get("rubrique"), "| catégories WP:", WP_CATS)
 log("Titre:", TITLE, "| paragraphes:", len(PARAS), "| images article:", len(ARTICLE_IMGS))
 
 # ------------------------------------------------------------------ 2. script
@@ -211,7 +220,7 @@ if CFG.get("photos_article", True):
 TEXT_ALL = (TITLE + " " + " ".join(PARAS)).lower()
 THEMES = []
 if re.search(r"football|lions de l.atlas|stade|fifa|caf\b|coupe du monde|can 20|botola|hassania|sélection nationale", TEXT_ALL): THEMES.append("football")
-if re.search(r"agadir|souss|inezgane|aït melloul|taghazout", TEXT_ALL) or not THEMES: THEMES.append("agadir")
+if re.search(r"agadir|inezgane|aït melloul|taghazout|oufella", TITLE.lower() + " " + " ".join(PARAS[:3]).lower()): THEMES.append("agadir")
 for th in THEMES + CFG.get("banques", []):
     bd = HERE / "banque" / th
     if not bd.exists(): continue
@@ -272,13 +281,73 @@ def commons_cat(cat, limit):
         out.append((ii["thumburl"], f"{artist} ({lic})"))
     random.Random(cat).shuffle(out)
     return out[:limit]
+KEYMAP = {"puce": "microchip", "cerveau": "brain", "pensée": "brain", "neurone": "neuron", "implant": "brain implant",
+    "intelligence artificielle": "artificial intelligence", "ia": "artificial intelligence", "robot": "robot", "ordinateur": "computer",
+    "smartphone": "smartphone", "internet": "data center", "numérique": "data center", "satellite": "satellite", "espace": "space",
+    "santé": "hospital", "hôpital": "hospital", "médecin": "hospital", "maladie": "laboratory", "vaccin": "vaccine", "science": "laboratory",
+    "recherche": "laboratory", "étude": "laboratory", "école": "school classroom", "université": "university campus", "élèves": "school classroom",
+    "économie": "business district", "banque": "bank building", "bourse": "stock exchange", "prix": "market stall", "inflation": "market stall",
+    "agriculture": "agriculture field", "agricole": "agriculture field", "argan": "argan tree", "pêche": "fishing boats", "eau": "dam reservoir",
+    "sécheresse": "drought", "pluie": "rain", "climat": "climate", "énergie": "solar power plant", "solaire": "solar power plant",
+    "éolien": "wind farm", "pétrole": "oil refinery", "gaz": "gas pipeline", "tourisme": "beach resort", "hôtel": "hotel",
+    "aéroport": "airport", "avion": "airplane", "train": "train", "tramway": "tramway", "route": "highway", "autoroute": "highway",
+    "port": "port", "voiture": "traffic", "élection": "ballot box", "parlement": "parliament building", "justice": "courthouse",
+    "tribunal": "courthouse", "police": "police car", "mosquée": "mosque", "ramadan": "mosque", "culture": "museum", "musique": "concert",
+    "festival": "festival", "cinéma": "cinema", "livre": "library", "football": "stadium", "stade": "stadium", "sport": "stadium",
+    "athlétisme": "athletics track", "basket": "basketball court", "tennis": "tennis court", "immobilier": "apartment buildings",
+    "logement": "apartment buildings", "construction": "construction site", "chantier": "construction site", "séisme": "earthquake damage",
+    "incendie": "forest fire", "mer": "sea", "océan": "ocean", "plage": "beach", "montagne": "mountains", "désert": "desert",
+    "maroc": "Morocco", "afrique": "Africa", "europe": "Europe", "france": "Paris", "espagne": "Spain", "migration": "border",
+    "téléphone": "smartphone", "réseaux sociaux": "smartphone", "jeunes": "university students", "femmes": "conference",
+    "emploi": "office", "entreprise": "office building", "industrie": "factory", "usine": "factory", "commerce": "market",
+    "souk": "souk", "artisanat": "handicraft", "cuisine": "Moroccan cuisine", "thé": "Moroccan tea", "désinformation": "newspaper",
+    "presse": "newspaper", "médias": "newspaper", "technologie": "technology", "innovation": "technology", "données": "data center"}
+STOP = set("le la les un une des du de d l et ou à au aux en dans sur pour par avec sans sous plus moins très est sont été être a ont "
+           "ce cette ces qui que quoi dont où se sa son ses leur leurs nos notre vos votre il elle ils elles on nous vous si ne pas "
+           "et-si comme mais donc car ni tout tous toute toutes après avant entre depuis chez quand comment pourquoi".split())
+def topic_queries():
+    if SOCIAL and SOCIAL.get("keywords_images"):
+        return SOCIAL["keywords_images"]
+    head = (TITLE + " " + " ".join(PARAS[:4])).lower()
+    found = []
+    for k in sorted(KEYMAP, key=len, reverse=True):
+        if re.search(r"\b" + re.escape(k) + r"s?\b", head) and KEYMAP[k] not in found:
+            found.append(KEYMAP[k])
+    title_words = [w for w in re.findall(r"[a-zà-ÿ]{5,}", TITLE.lower()) if w not in STOP]
+    qs = []
+    if len(found) >= 2: qs.append(found[0] + " " + found[1])
+    qs += found[:5]
+    qs += [w for w in title_words if w not in KEYMAP][:2]
+    places = [k for k in CATS if k in head and k != "maroc"]
+    return qs, places
+def commons_search(q, limit):
+    try:
+        r = requests.get("https://commons.wikimedia.org/w/api.php", headers=UA, timeout=30, params={
+            "action": "query", "generator": "search", "gsrsearch": q + " filetype:bitmap", "gsrnamespace": 6, "gsrlimit": 40,
+            "prop": "imageinfo", "iiprop": "url|size|extmetadata", "iiurlwidth": 1600, "format": "json"}).json()
+    except Exception as e:
+        log("Commons erreur", e); return []
+    out = []
+    for pg in sorted((r.get("query") or {}).get("pages", {}).values(), key=lambda p: p.get("index", 99)):
+        if not pg.get("imageinfo"): continue
+        ii = pg["imageinfo"][0]; md = ii.get("extmetadata", {})
+        lic = md.get("LicenseShortName", {}).get("value", "")
+        desc = (pg["title"] + " " + re.sub(r"<[^>]+>", " ", md.get("ImageDescription", {}).get("value", ""))).lower()
+        if ii["width"] < 1400 or ii["width"] < ii["height"] * 1.3: continue
+        if not re.search(r"cc|public domain|pd", lic, re.I) or re.search(BAD, desc): continue
+        artist = re.sub(r"<[^>]+>", "", md.get("Artist", {}).get("value", "")).strip()[:40]
+        out.append((ii["thumburl"], f"{artist} ({lic})"))
+        if len(out) >= limit: break
+    return out
 if len(MEDIA) < need and CFG.get("commons", True):
     got = 0
-    keys = [k for k in CATS if k in TEXT_ALL and k != "maroc"] or ["agadir"]
-    cats = [c for k in keys[:3] for c in CATS[k]] + CFG.get("categories_commons", []) + CATS["maroc"]
-    for cat in cats:
+    qs, places = topic_queries()
+    log("Recherche photos:", qs, "| lieux:", places)
+    sources_list = [("s", q) for q in qs] + [("c", c) for k in places[:2] for c in CATS[k]]
+    for kind, q in sources_list:
         if len(MEDIA) >= need: break
-        for url, cr in commons_cat(cat, 3):
+        res = commons_search(q, 3) if kind == "s" else commons_cat(q, 2)
+        for url, cr in res:
             if len(MEDIA) >= need: break
             p = dl(url, f"commons_{got}.jpg")
             if p: MEDIA.append(p); CREDITS.append(cr); got += 1
