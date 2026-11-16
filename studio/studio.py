@@ -616,8 +616,9 @@ url = "souss-actualites.com"; d.text(((W - d.textlength(url, font=F_URL)) / 2, 1
 CREDITS = [c for c in CREDITS if c]
 credit_txt = "Photos : " + ("Wikimedia Commons — " + ", ".join(dict.fromkeys(CREDITS)) if CREDITS else "Souss Actualités")
 if CREDITS and len(MEDIA) > len(CREDITS): credit_txt += " ; Souss Actualités"
-if CFG.get("musique", "elan") != "aucune": credit_txt += ". Musique originale."
-if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else "")
+_mc = OUT / "music.wav.credit"
+if CFG.get("musique", "elan") != "aucune": credit_txt += (". " + _mc.read_text() if _mc.exists() else ". Musique originale.")
+if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + (("، " + _mc.read_text()) if _mc.exists() else ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else ""))
 _intro_brand = Image.new("RGBA", (W, H), (0, 0, 0, 0)); _ib = ImageDraw.Draw(_intro_brand)
 _bf = arfont(110) if AR else font("Inter-Black.otf", 96)
 _bt = "أخبار سوس" if AR else "SOUSS ACTUALITÉS"

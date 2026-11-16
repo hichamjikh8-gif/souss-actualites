@@ -1,6 +1,36 @@
 """Musique originale générée (libre de droits). Usage: music.py sortie.wav durée [elan|calme|dramatique]"""
 import numpy as np, soundfile as sf, sys
 OUTF, DUR = sys.argv[1], float(sys.argv[2]); MOOD = sys.argv[3] if len(sys.argv) > 3 else "elan"
+# ---- Musique classique (enregistrements du domaine public / libres, Wikimedia Commons)
+CLASSIQUE = {
+    "mozart_nachtmusik": ("File:Mozart K525 Serenade in G Major 1 - Allegro.ogg", "Mozart – Une petite musique de nuit"),
+    "mozart_romance": ("File:Mozart K525 Serenade in G Major 2 - Romance.ogg", "Mozart – Une petite musique de nuit (Romance)"),
+    "mozart_piano": ("File:Mozart - Piano Sonata No. 16 in C major - II. Andante.ogg", "Mozart – Sonate pour piano n°16 (Andante)"),
+    "mozart_concerto": ("File:Mozart; Concerto No. 25 in C- II. Andante.ogg", "Mozart – Concerto pour piano n°25 (Andante)"),
+    "beethoven_lune": ("File:Ludwig van Beethoven - sonata no. 14 in c sharp minor 'moonlight', op. 27 no. 2 - i. adagio sostenuto.ogg", "Beethoven – Sonate « Clair de lune »"),
+    "vivaldi_printemps": ("File:The Modena Chamber Orchestra - Vivaldi's Spring, RV 269 - I. Allegro.ogg", "Vivaldi – Le Printemps"),
+    "chopin_nocturne": ("File:Chopin Nocturne No. 2 in E Flat Major, Op. 9.ogg", "Chopin – Nocturne op. 9 n°2"),
+    "bach_air": ("File:Air (Bach).ogg", "Bach – Air de la Suite n°3"),
+}
+if MOOD in CLASSIQUE:
+    import requests, re, subprocess, os
+    title, nom = CLASSIQUE[MOOD]
+    UA = {"User-Agent": "SoussActualitesStudio/1.0 (souss-actualites.com)"}
+    r = requests.get("https://commons.wikimedia.org/w/api.php", headers=UA, timeout=30, params={
+        "action": "query", "titles": title, "prop": "imageinfo", "iiprop": "url|extmetadata", "format": "json"}).json()
+    pg = list(r["query"]["pages"].values())[0]; ii = pg["imageinfo"][0]; md = ii.get("extmetadata", {})
+    lic = md.get("LicenseShortName", {}).get("value", "")
+    if not re.search(r"public domain|pd|cc0|cc by", lic, re.I): raise SystemExit("licence non libre: " + lic)
+    artist = re.sub(r"<[^>]+>", "", md.get("Artist", {}).get("value", "")).strip()[:50]
+    src = OUTF + ".src"
+    open(src, "wb").write(requests.get(ii["url"], headers=UA, timeout=120).content)
+    fo = 4.0
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", src, "-t", str(DUR),
+                    "-af", f"loudnorm=I=-18:TP=-2,afade=t=in:d=1.5,afade=t=out:st={max(DUR - fo, 0)}:d={fo}",
+                    "-ar", "44100", "-ac", "2", OUTF], check=True)
+    os.remove(src)
+    open(OUTF + ".credit", "w").write(f"Musique : {nom} ({artist}, {lic}, Wikimedia Commons)")
+    sys.exit(0)
 SR = 44100
 P = {"elan":       dict(bpm=96, prog=[[50,57,62,65],[46,58,62,65],[53,57,60,65],[48,55,60,64]], roots=[38,34,41,36], drums=True, pad=0.22, arp=0.10),
      "calme":      dict(bpm=72, prog=[[48,55,60,64],[45,52,57,60],[41,48,53,57],[43,50,55,59]], roots=[36,33,29,31], drums=False, pad=0.20, arp=0.13),
