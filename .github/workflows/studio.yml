@@ -28,7 +28,7 @@ jobs:
         id: job
         run: |
           if [ -n "${{ github.event.inputs.job }}" ]; then J="${{ github.event.inputs.job }}"; else
-          J=$(git diff --diff-filter=AM --name-only HEAD~1 HEAD | grep -E '^jobs/[^/]+/job.json$' | head -1 | xargs dirname); fi
+          J=$(git diff --diff-filter=AM --name-only HEAD~1 HEAD | grep -E '^jobs/[^/]+/job.json$' | head -1 | xargs -r dirname || true); fi
           if [ -z "$J" ] || [ "$J" = "." ]; then echo "Rien à faire"; exit 0; fi; echo "dir=$J" >> $GITHUB_OUTPUT; echo "id=$(basename $J)" >> $GITHUB_OUTPUT; echo "Job: $J"
       - uses: actions/setup-python@v5
         if: steps.job.outputs.dir != ''
