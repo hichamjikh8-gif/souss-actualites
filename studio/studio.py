@@ -469,6 +469,9 @@ def text_layer(txt):
     lines = textwrap.wrap(txt, 26)
     if len(lines) > 1 and len(lines[-1]) < 10: lines = textwrap.wrap(txt, max(14, len(txt) // len(lines) + 4))
     lh = 90 if AR else 76; y0 = (360 - lh * len(lines)) // 2
+    if FULL:
+        bw = max(tlen(d, l, F_SUB) for l in lines) + 70
+        d.rounded_rectangle(((W - bw) / 2, y0 - 22, (W + bw) / 2, y0 + lh * len(lines) + 18), radius=22, fill=(0, 0, 0, 150))
     for i, l in enumerate(lines):
         w = tlen(d, l, F_SUB); x = (W - w) / 2; y = y0 + i * lh
         for dx, dy in ((0, 4), (2, 4), (-2, 4)): T(d, (x + dx, y + dy), l, F_SUB, (0, 0, 0, 160))
@@ -476,54 +479,44 @@ def text_layer(txt):
     return lay
 
 PH_W, PH_H, PH_Y = 1080, 640, 600
+FULL = CFG.get("plein_ecran", True)
+def ease(p): return 0.5 - 0.5 * math.cos(math.pi * min(max(p, 0), 1))
 class Still:
+    """Photo plein écran avec mouvement « Ken Burns » bien visible."""
     def __init__(self, path):
         im = Image.open(path).convert("RGB")
-        if im.width < im.height * 1.2:  # photo verticale: on la place sur fond flouté
-            canvas = im.resize((int(im.width * 1100 / im.height), 1100))
-            bgc = im.resize((1900, 1100)).filter(ImageFilter.GaussianBlur(30))
-            bgc.paste(canvas, ((1900 - canvas.width) // 2, 0)); im = bgc
-        self.im = im
         sc = max(W / im.width, H / im.height)
-        bg = im.resize((int(im.width * sc) + 1, int(im.height * sc) + 1), Image.BILINEAR)
-        l, t = (bg.width - W) // 2, (bg.height - H) // 2
-        self.bg = ImageEnhance.Brightness(bg.crop((l, t, l + W, t + H)).filter(ImageFilter.GaussianBlur(40))).enhance(0.42)
+        if sc > 1:  # agrandir une seule fois en bonne qualité
+            im = im.resize((int(im.width * sc * 1.0) + 1, int(im.height * sc) + 1), Image.LANCZOS)
+        self.im = im
+        self.land = im.width / im.height > W / H * 1.15
     def frame(self, p, idx):
-        im = self.im; ar = PH_W / PH_H
-        e = 0.5 - 0.5 * math.cos(math.pi * p)          # mouvement doux (ease-in-out)
-        zmax = 1.0 + min(0.30, 0.10 + per * 0.012)      # plus la photo reste, plus le zoom est ample
-        z = 1.0 + (zmax - 1.0) * (e if idx % 2 == 0 else 1 - e)
-        cw = im.width / z; ch = cw / ar
-        if ch > im.height: ch = im.height; cw = ch * ar
-        if cw > im.width: cw = im.width; ch = cw / ar
-        dirs = [(1, 0), (-1, 0), (0, 1), (1, 1), (-1, -1), (0, -1)]
-        dx, dy = dirs[idx % len(dirs)]
-        cx = im.width / 2 + dx * (e - 0.5) * (im.width - cw) * 0.8
-        cy = im.height / 2 + dy * (e - 0.5) * (im.height - ch) * 0.8
-        ph = im.resize((PH_W, PH_H), Image.BICUBIC, box=(cx - cw / 2, cy - ch / 2, cx + cw / 2, cy + ch / 2))
-        fr = self.bg.copy(); fr.paste(ph, (0, PH_Y)); return fr
+        im = self.im; e = ease(p); ar = W / H
+        if self.land:   # photo horizontale : traversée de gauche à droite (ou l'inverse) + léger zoom
+            z = 1.0 + 0.10 * e
+            ch = im.height / z; cw = ch * ar
+            span = im.width - cw
+            x0 = span * (e if idx % 2 == 0 else 1 - e)
+            y0 = (im.height - ch) / 2
+        else:           # photo verticale : zoom avant/arrière marqué + petite dérive
+            zmax = 1.32
+            z = 1.0 + (zmax - 1.0) * (e if idx % 2 == 0 else 1 - e)
+            cw = min(im.width, im.height * ar) / z; ch = cw / ar
+            dx, dy = [(0.5, 0.35), (0.5, 0.65), (0.35, 0.5), (0.65, 0.5)][idx % 4]
+            x0 = (im.width - cw) * (0.5 + (dx - 0.5) * e)
+            y0 = (im.height - ch) * (0.5 + (dy - 0.5) * e)
+        return im.resize((W, H), Image.BILINEAR, box=(x0, y0, x0 + cw, y0 + ch))
 
 class Clip:
-    """Vidéo fournie: lue image par image (sans son), recadrée dans la zone photo."""
+    """Vidéo fournie: plein écran (recadrée), sans son."""
     def __init__(self, path, seconds):
-        self.n = int(seconds * FPS) + 2
         cmd = ["ffmpeg", "-loglevel", "error", "-stream_loop", "-1", "-i", str(path), "-t", str(seconds + 0.2), "-r", str(FPS),
-               "-vf", f"scale={PH_W}:{PH_H}:force_original_aspect_ratio=increase,crop={PH_W}:{PH_H}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        first = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", str(path), "-frames:v", "1", "-vf", "scale=540:-1", "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True).stdout
-        import io
-        im = Image.open(io.BytesIO(first)).convert("RGB")
-        sc = max(W / im.width, H / im.height)
-        bg = im.resize((int(im.width * sc) + 1, int(im.height * sc) + 1))
-        l, t = (bg.width - W) // 2, (bg.height - H) // 2
-        self.bg = ImageEnhance.Brightness(bg.crop((l, t, l + W, t + H)).filter(ImageFilter.GaussianBlur(40))).enhance(0.42)
-        self.last = None
+               "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE); self.last = Image.new("RGB", (W, H))
     def frame(self, p, idx):
-        raw = self.proc.stdout.read(PH_W * PH_H * 3)
-        if len(raw) == PH_W * PH_H * 3: self.last = Image.frombytes("RGB", (PH_W, PH_H), raw)
-        fr = self.bg.copy()
-        if self.last: fr.paste(self.last, (0, PH_Y))
-        return fr
+        raw = self.proc.stdout.read(W * H * 3)
+        if len(raw) == W * H * 3: self.last = Image.frombytes("RGB", (W, H), raw)
+        return self.last.copy()
 
 VIDEXT = (".mp4", ".mov", ".m4v", ".webm")
 order = list(MEDIA)
@@ -556,7 +549,14 @@ else:
     y = 300
     tl = textwrap.wrap(TITLE_SHOW, 30)[:4]
     for l in tl: d.text((70, y), l, font=F_TITLE, fill="white"); y += 70
-d.rectangle((0, PH_Y - 6, W, PH_Y), fill=ACCENT)
+_g = Image.new("L", (1, H))
+for _y in range(H):
+    if _y < 700: v = int(225 * (1 - _y / 700) ** 1.2) + (30 if _y < 560 else 0)
+    elif _y > 1150: v = int(235 * ((_y - 1150) / 770) ** 0.9)
+    else: v = 0
+    _g.putpixel((0, _y), max(0, min(255, v)))
+_shade = Image.new("RGBA", (W, H), (0, 0, 0, 0)); _shade.putalpha(_g.resize((W, H)))
+static = Image.alpha_composite(_shade, static); d = ImageDraw.Draw(static)
 url = "souss-actualites.com"; d.text(((W - d.textlength(url, font=F_URL)) / 2, 1790), url, font=F_URL, fill=(235, 235, 235))
 
 CREDITS = [c for c in CREDITS if c]
