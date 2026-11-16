@@ -1,0 +1,65 @@
+name: Studio vidéo Souss Actualités
+on:
+  push:
+    branches: [videos]
+    paths: ["jobs/*/job.json"]
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Dossier du job (ex: jobs/20261116-1200)"
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: studio-${{ github.sha }}
+jobs:
+  video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: videos
+          fetch-depth: 2
+          sparse-checkout: |
+            studio
+            jobs
+      - name: Trouver le job
+        id: job
+        run: |
+          if [ -n "${{ github.event.inputs.job }}" ]; then J="${{ github.event.inputs.job }}"; else
+          J=$(git diff --name-only HEAD~1 HEAD | grep -E '^jobs/[^/]+/job.json$' | head -1 | xargs dirname); fi
+          echo "dir=$J" >> $GITHUB_OUTPUT; echo "id=$(basename $J)" >> $GITHUB_OUTPUT; echo "Job: $J"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: studio/requirements.txt
+      - name: Modèle de voix (cache)
+        uses: actions/cache@v4
+        with:
+          path: studio/models
+          key: kokoro-v1.0
+      - name: Installer
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg espeak-ng > /dev/null
+          pip install -q -r studio/requirements.txt
+          mkdir -p studio/models && cd studio/models
+          for f in kokoro-v1.0.onnx voices-v1.0.bin; do [ -f $f ] || curl -sSL -o $f https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/$f; done
+      - name: Fabriquer la vidéo
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python studio/studio.py "${{ steps.job.outputs.dir }}"
+      - name: Publier le résultat
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          D="${{ steps.job.outputs.dir }}/out"; ID="${{ steps.job.outputs.id }}"
+          if ls $D/*.mp4 >/dev/null 2>&1; then
+            gh release create "job-$ID" $D/*.mp4 $D/miniature.jpg $D/description.txt $D/result.json \
+              --target videos --title "Vidéo $ID" --notes-file $D/description.txt --prerelease
+          else
+            echo '{"error":"La vidéo n a pas pu être créée. Voir le journal GitHub Actions."}' > /tmp/error.json
+            gh release create "job-$ID" /tmp/error.json --target videos --title "Erreur $ID" --notes "Échec" --prerelease
+          fi

@@ -1,0 +1,161 @@
+<div id="sas-studio">
+<style>
+#sas-studio{--a:#e6781e;--bg:#101216;--card:#1a1d23;--t:#eceef2;--m:#9aa1ad;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--t);border-radius:16px;padding:28px;max-width:860px;margin:0 auto;line-height:1.5}
+#sas-studio *{box-sizing:border-box}
+#sas-studio h2{margin:0 0 4px;font-size:28px;color:#fff}
+#sas-studio .sub{color:var(--m);margin:0 0 22px}
+#sas-studio .card{background:var(--card);border-radius:12px;padding:20px;margin-bottom:16px}
+#sas-studio label{display:block;font-weight:600;margin:12px 0 6px;color:#fff}
+#sas-studio input[type=text],#sas-studio input[type=password],#sas-studio input[type=url],#sas-studio textarea,#sas-studio select{width:100%;background:#0d0f13;border:1px solid #2c313a;color:var(--t);border-radius:8px;padding:12px;font-size:16px}
+#sas-studio textarea{min-height:140px}
+#sas-studio .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+#sas-studio .tabs{display:flex;gap:8px;margin-bottom:6px}
+#sas-studio .tab{flex:1;padding:10px;border-radius:8px;border:1px solid #2c313a;background:#0d0f13;color:var(--m);cursor:pointer;font-weight:600}
+#sas-studio .tab.on{border-color:var(--a);color:#fff;background:#2a1d12}
+#sas-studio .drop{border:2px dashed #3a404b;border-radius:10px;padding:22px;text-align:center;color:var(--m);cursor:pointer}
+#sas-studio .drop.hov{border-color:var(--a);color:#fff}
+#sas-studio .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+#sas-studio .thumbs div{position:relative;width:92px;height:62px;border-radius:6px;overflow:hidden;background:#000}
+#sas-studio .thumbs img,#sas-studio .thumbs video{width:100%;height:100%;object-fit:cover}
+#sas-studio .thumbs b{position:absolute;top:2px;right:4px;cursor:pointer;color:#fff;text-shadow:0 0 3px #000}
+#sas-studio .chk{display:flex;gap:8px;align-items:center;color:var(--m);margin-top:10px;font-weight:400}
+#sas-studio .go{width:100%;padding:18px;font-size:20px;font-weight:800;border:0;border-radius:12px;background:var(--a);color:#fff;cursor:pointer;margin-top:6px}
+#sas-studio .go:disabled{opacity:.5;cursor:wait}
+#sas-studio .btn{display:inline-block;padding:10px 16px;border-radius:8px;border:1px solid #3a404b;background:#0d0f13;color:#fff;cursor:pointer;text-decoration:none;font-weight:600;margin:6px 6px 0 0}
+#sas-studio .bar{height:10px;background:#0d0f13;border-radius:6px;overflow:hidden;margin:12px 0}
+#sas-studio .bar i{display:block;height:100%;width:0;background:var(--a);transition:width .8s}
+#sas-studio .res{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start}
+#sas-studio .res video{width:100%;border-radius:10px;background:#000;aspect-ratio:9/16}
+#sas-studio pre{white-space:pre-wrap;background:#0d0f13;border-radius:8px;padding:12px;font-family:inherit;font-size:14px;margin:0}
+#sas-studio .hist a{color:var(--a)}
+#sas-studio .muted{color:var(--m);font-size:14px}
+#sas-studio .err{color:#ff6b6b}
+@media(max-width:640px){#sas-studio .row,#sas-studio .res{grid-template-columns:1fr}}
+</style>
+
+<h2>🎬 Studio vidéo</h2>
+<p class="sub">Collez l’article, cliquez, et la vidéo verticale est prête en 5 minutes environ : photos, voix, musique et sous-titres.</p>
+
+<div class="card" id="sas-setup" style="display:none">
+  <label>Clé d’accès GitHub (une seule fois)</label>
+  <input type="password" id="sas-token" placeholder="github_pat_…">
+  <p class="muted">Elle reste enregistrée dans ce navigateur uniquement.</p>
+  <button class="btn" id="sas-savetok">Enregistrer</button>
+</div>
+
+<div class="card">
+  <div class="tabs"><button class="tab on" data-m="url">🔗 Lien de l’article</button><button class="tab" data-m="text">📝 Coller le texte</button></div>
+  <div id="sas-urlbox"><input type="url" id="sas-url" placeholder="https://souss-actualites.com/2026/11/…"></div>
+  <div id="sas-textbox" style="display:none">
+    <input type="text" id="sas-title" placeholder="Titre de la vidéo">
+    <textarea id="sas-text" placeholder="Collez ici le texte de l’article…" style="margin-top:8px"></textarea>
+  </div>
+  <div class="row">
+    <div><label>Format</label><select id="sas-mode"><option value="resume">Résumé (≈ 1 minute)</option><option value="complet">Article complet</option></select></div>
+    <div><label>Musique</label><select id="sas-music"><option value="elan">Élan (dynamique)</option><option value="calme">Calme (piano doux)</option><option value="dramatique">Dramatique</option><option value="aucune">Sans musique</option></select></div>
+  </div>
+  <div class="row">
+    <div><label>Rubrique affichée</label><input type="text" id="sas-rub" value="Actualité · Agadir"></div>
+    <div><label>Signature</label><input type="text" id="sas-by" value="Hicham Jikh Cheddad"></div>
+  </div>
+</div>
+
+<div class="card">
+  <label style="margin-top:0">Vos photos et vidéos (facultatif)</label>
+  <div class="drop" id="sas-drop">Glissez vos photos / vidéos ici ou <u>cliquez pour choisir</u><br><span class="muted">JPG, PNG, MP4, MOV — elles passent en premier, dans l’ordre</span></div>
+  <input type="file" id="sas-files" multiple accept="image/*,video/*" style="display:none">
+  <div class="thumbs" id="sas-thumbs"></div>
+  <label class="chk"><input type="checkbox" id="sas-artimg" checked> Utiliser aussi les photos de l’article</label>
+  <label class="chk"><input type="checkbox" id="sas-commons" checked> Compléter avec des photos réelles libres de droits (Wikimedia)</label>
+</div>
+
+<button class="go" id="sas-go">▶ Créer la vidéo</button>
+
+<div class="card" id="sas-prog" style="display:none;margin-top:16px">
+  <b id="sas-step">Préparation…</b>
+  <div class="bar"><i id="sas-pbar"></i></div>
+  <span class="muted" id="sas-det"></span>
+</div>
+
+<div class="card" id="sas-result" style="display:none;margin-top:16px">
+  <div class="res">
+    <video id="sas-video" controls playsinline></video>
+    <div>
+      <b style="font-size:18px">✅ Vidéo prête</b><br>
+      <a class="btn" id="sas-dl" href="#" target="_blank">⬇ Télécharger la vidéo</a>
+      <button class="btn" id="sas-copy">📋 Copier le texte</button><br>
+      <a class="btn" href="https://www.tiktok.com/tiktokstudio/upload" target="_blank">TikTok</a>
+      <a class="btn" href="https://studio.youtube.com/" target="_blank">YouTube</a>
+      <a class="btn" href="https://www.facebook.com/" target="_blank">Facebook</a>
+      <label>Texte pour les réseaux</label>
+      <pre id="sas-desc"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="card hist" style="margin-top:16px">
+  <b>Dernières vidéos</b> <span class="muted">(<a href="#" id="sas-reload">actualiser</a> · <a href="#" id="sas-resettok">changer la clé</a>)</span>
+  <div id="sas-hist" class="muted" style="margin-top:8px">…</div>
+</div>
+
+<script>
+(function(){
+const OWNER="hichamjikh8-gif", REPO="souss-actualites", BRANCH="videos", API="https://api.github.com/repos/"+OWNER+"/"+REPO;
+const $=id=>document.getElementById(id);
+let mode="url", files=[];
+let TOKEN=""; try{TOKEN=localStorage.getItem("sas_token")||""}catch(e){}
+if(!TOKEN) $("sas-setup").style.display="block";
+$("sas-savetok").onclick=()=>{TOKEN=$("sas-token").value.trim(); try{localStorage.setItem("sas_token",TOKEN)}catch(e){} $("sas-setup").style.display="none"; hist();};
+$("sas-resettok").onclick=e=>{e.preventDefault(); $("sas-setup").style.display="block";};
+document.querySelectorAll("#sas-studio .tab").forEach(b=>b.onclick=()=>{document.querySelectorAll("#sas-studio .tab").forEach(x=>x.classList.remove("on"));b.classList.add("on");mode=b.dataset.m;$("sas-urlbox").style.display=mode=="url"?"":"none";$("sas-textbox").style.display=mode=="text"?"":"none";});
+const drop=$("sas-drop");
+drop.onclick=()=>$("sas-files").click();
+$("sas-files").onchange=e=>addFiles(e.target.files);
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hov")}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("hov")}));
+drop.addEventListener("drop",e=>addFiles(e.dataTransfer.files));
+function addFiles(list){for(const f of list){if(f.size>90e6){alert(f.name+" : fichier trop lourd (max 90 Mo)");continue}files.push(f)}draw()}
+function draw(){const t=$("sas-thumbs");t.innerHTML="";files.forEach((f,i)=>{const d=document.createElement("div");const u=URL.createObjectURL(f);d.innerHTML=(f.type.startsWith("video")?'<video src="'+u+'" muted></video>':'<img src="'+u+'">')+'<b title="Retirer">✕</b>';d.querySelector("b").onclick=()=>{files.splice(i,1);draw()};t.appendChild(d)})}
+async function gh(path,opt={}){opt.headers=Object.assign({"Authorization":"Bearer "+TOKEN,"Accept":"application/vnd.github+json"},opt.headers||{});const r=await fetch(API+path,opt);if(!r.ok&&r.status!=404)throw new Error("GitHub "+r.status+" "+(await r.text()).slice(0,200));return r.status==404?null:r.json()}
+function b64(buf){let s="",b=new Uint8Array(buf),c=0x8000;for(let i=0;i<b.length;i+=c)s+=String.fromCharCode.apply(null,b.subarray(i,i+c));return btoa(s)}
+async function put(path,contentB64,msg){return gh("/contents/"+path,{method:"PUT",body:JSON.stringify({message:msg,content:contentB64,branch:BRANCH})})}
+function step(txt,pct,det){$("sas-prog").style.display="block";$("sas-step").textContent=txt;$("sas-pbar").style.width=pct+"%";$("sas-det").innerHTML=det||""}
+$("sas-go").onclick=async()=>{
+  if(!TOKEN){$("sas-setup").style.display="block";return}
+  const job={mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:$("sas-artimg").checked,commons:$("sas-commons").checked};
+  if(mode=="url"){job.url=$("sas-url").value.trim();if(!job.url)return alert("Collez le lien de l’article.")}
+  else{job.text=$("sas-text").value.trim();job.title=$("sas-title").value.trim();if(!job.text)return alert("Collez le texte de l’article.")}
+  const d=new Date(),p=n=>String(n).padStart(2,"0");const id=d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
+  $("sas-go").disabled=true;$("sas-result").style.display="none";
+  try{
+    for(let i=0;i<files.length;i++){const f=files[i];step("Envoi de vos médias ("+(i+1)+"/"+files.length+")…",5+20*i/Math.max(files.length,1));
+      const ext=(f.name.split(".").pop()||"jpg").toLowerCase();await put("jobs/"+id+"/media/"+p(i+1)+"."+ext,b64(await f.arrayBuffer()),"média "+id)}
+    step("Lancement de la fabrication…",28);
+    await put("jobs/"+id+"/job.json",btoa(unescape(encodeURIComponent(JSON.stringify(job,null,1)))),"Nouvelle vidéo "+id);
+    const t0=Date.now();
+    const timer=setInterval(async()=>{const s=Math.round((Date.now()-t0)/1000);const pct=Math.min(95,30+s/3.2);
+      step("Fabrication de la vidéo… "+Math.floor(s/60)+" min "+p(s%60)+" s",pct,'Photos, voix, musique et montage. <a href="https://github.com/'+OWNER+'/'+REPO+'/actions" target="_blank" style="color:#e6781e">Voir le détail</a>');
+      try{const rel=await gh("/releases/tags/job-"+id);if(rel){clearInterval(timer);show(rel)}}catch(e){}
+      if(s>1500){clearInterval(timer);step("Trop long : vérifiez le détail sur GitHub.",100);$("sas-go").disabled=false}},10000);
+  }catch(e){step("Erreur : "+e.message,100);$("sas-step").classList.add("err");$("sas-go").disabled=false}
+};
+async function show(rel){
+  $("sas-go").disabled=false;
+  const mp4=rel.assets.find(a=>a.name.endsWith(".mp4"));const dsc=rel.assets.find(a=>a.name=="description.txt");
+  if(!mp4){step("La vidéo n’a pas pu être créée. Vérifiez le lien ou ajoutez des photos.",100);$("sas-step").classList.add("err");return}
+  step("Terminé ✅",100);
+  $("sas-result").style.display="block";
+  $("sas-dl").href=mp4.browser_download_url;
+  try{const blob=await (await fetch(mp4.url,{headers:{"Authorization":"Bearer "+TOKEN,"Accept":"application/octet-stream"}})).blob();$("sas-video").src=URL.createObjectURL(blob);
+      $("sas-dl").href=URL.createObjectURL(blob);$("sas-dl").download=mp4.name}catch(e){$("sas-video").src=mp4.browser_download_url}
+  $("sas-desc").textContent=rel.body||"";
+  $("sas-result").scrollIntoView({behavior:"smooth"});hist();
+}
+$("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textContent).then(()=>{$("sas-copy").textContent="✔ Copié"})};
+async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=8");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return "• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")}).join("<br>")||"Aucune vidéo pour l’instant.";
+  document.querySelectorAll("#sas-hist a").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))})}catch(e){$("sas-hist").textContent="Clé GitHub invalide ? "+e.message}}
+$("sas-reload").onclick=e=>{e.preventDefault();hist()};
+hist();
+})();
+</script>
+</div>
