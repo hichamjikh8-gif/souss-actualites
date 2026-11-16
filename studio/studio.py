@@ -206,6 +206,10 @@ if mdir.exists():
         if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".m4v", ".webm"):
             MEDIA.append(f)
 log("Médias utilisateur:", len(MEDIA))
+ONLY_MINE = bool(MEDIA) or CFG.get("seulement_mes_photos", False)
+if ONLY_MINE:
+    CFG["photos_article"] = False; CFG["commons"] = False
+    log("Mode : uniquement les photos fournies")
 # b) photos de l'article
 if CFG.get("photos_article", True):
     seen = set()
@@ -221,7 +225,7 @@ TEXT_ALL = (TITLE + " " + " ".join(PARAS)).lower()
 THEMES = []
 if re.search(r"football|lions de l.atlas|stade|fifa|caf\b|coupe du monde|can 20|botola|hassania|sélection nationale", TEXT_ALL): THEMES.append("football")
 if re.search(r"agadir|inezgane|aït melloul|taghazout|oufella", TITLE.lower() + " " + " ".join(PARAS[:3]).lower()): THEMES.append("agadir")
-for th in THEMES + CFG.get("banques", []):
+for th in ([] if ONLY_MINE else THEMES + CFG.get("banques", [])):
     bd = HERE / "banque" / th
     if not bd.exists(): continue
     cr = json.load(open(bd / "credits.json"))
@@ -424,11 +428,17 @@ class Still:
         l, t = (bg.width - W) // 2, (bg.height - H) // 2
         self.bg = ImageEnhance.Brightness(bg.crop((l, t, l + W, t + H)).filter(ImageFilter.GaussianBlur(40))).enhance(0.42)
     def frame(self, p, idx):
-        im = self.im; z = 1.0 + 0.12 * (p if idx % 2 == 0 else 1 - p); ar = PH_W / PH_H
+        im = self.im; ar = PH_W / PH_H
+        e = 0.5 - 0.5 * math.cos(math.pi * p)          # mouvement doux (ease-in-out)
+        zmax = 1.0 + min(0.30, 0.10 + per * 0.012)      # plus la photo reste, plus le zoom est ample
+        z = 1.0 + (zmax - 1.0) * (e if idx % 2 == 0 else 1 - e)
         cw = im.width / z; ch = cw / ar
-        if ch > im.height / z: ch = im.height / z; cw = ch * ar
-        pan = (p - 0.5) * (im.width - cw) * 0.6 * (1 if idx % 3 else -1)
-        cx, cy = im.width / 2 + pan, im.height / 2
+        if ch > im.height: ch = im.height; cw = ch * ar
+        if cw > im.width: cw = im.width; ch = cw / ar
+        dirs = [(1, 0), (-1, 0), (0, 1), (1, 1), (-1, -1), (0, -1)]
+        dx, dy = dirs[idx % len(dirs)]
+        cx = im.width / 2 + dx * (e - 0.5) * (im.width - cw) * 0.8
+        cy = im.height / 2 + dy * (e - 0.5) * (im.height - ch) * 0.8
         ph = im.resize((PH_W, PH_H), Image.BICUBIC, box=(cx - cw / 2, cy - ch / 2, cx + cw / 2, cy + ch / 2))
         fr = self.bg.copy(); fr.paste(ph, (0, PH_Y)); return fr
 
@@ -457,7 +467,7 @@ class Clip:
 VIDEXT = (".mp4", ".mov", ".m4v", ".webm")
 order = list(MEDIA)
 slots = max(len(order), int((VOICE_DUR + 1) / float(CFG.get("sec_par_image", 6.5))))
-seq = [order[i % len(order)] for i in range(slots)] if len(order) < slots else order
+seq = order if ONLY_MINE else ([order[i % len(order)] for i in range(slots)] if len(order) < slots else order)
 per = (VOICE_DUR + 1.0) / len(seq)
 sources = {}
 def src(i):
@@ -498,7 +508,7 @@ def outro(fr, a):
     return Image.alpha_composite(fr, ov)
 
 import unicodedata
-slug = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", TITLE.lower()).encode("ascii", "ignore").decode())[:60].strip("-") or "video"
+slug = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", TITLE.lower().replace("œ", "oe").replace("æ", "ae")).encode("ascii", "ignore").decode())[:60].strip("-") or "video"
 VIDEO = OUT / f"{slug}.mp4"
 has_music = (OUT / "music.wav").exists()
 af = "[1:a]adelay=500|500,apad,aformat=channel_layouts=stereo:sample_rates=44100"
@@ -511,7 +521,7 @@ cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb2
        "-filter_complex", af, "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-maxrate", "2M", "-bufsize", "4M",
        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", str(VIDEO)]
 ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-ci, XF, cache = 0, 0.7, {}
+ci, XF, cache = 0, 0.9, {}
 for f in range(NF):
     t = f / FPS; tv = t - 0.5
     idx = min(int(t // per), len(seq) - 1); local = t - idx * per

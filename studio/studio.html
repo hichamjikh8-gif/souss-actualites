@@ -61,12 +61,11 @@
 </div>
 
 <div class="card">
-  <label style="margin-top:0">Vos photos et vidéos (facultatif)</label>
-  <div class="drop" id="sas-drop">Glissez vos photos / vidéos ici ou <u>cliquez pour choisir</u><br><span class="muted">JPG, PNG, MP4, MOV — elles passent en premier, dans l’ordre</span></div>
+  <label style="margin-top:0">Vos photos et vidéos <span style="color:#e6781e">(obligatoire)</span></label>
+  <div class="drop" id="sas-drop"><b style="font-size:18px">📷 Cliquez ici pour choisir vos photos</b><br><span class="muted">5 photos conseillées pour une vidéo d’1 minute — elles apparaissent dans l’ordre, avec un zoom doux</span></div>
   <input type="file" id="sas-files" multiple accept="image/*,video/*" style="display:none">
   <div class="thumbs" id="sas-thumbs"></div>
-  <label class="chk"><input type="checkbox" id="sas-artimg" checked> Utiliser aussi les photos de l’article</label>
-  <label class="chk"><input type="checkbox" id="sas-commons" checked> Compléter avec des photos réelles libres de droits (Wikimedia)</label>
+
 </div>
 
 <button class="go" id="sas-go">▶ Créer la vidéo</button>
@@ -130,7 +129,8 @@ async function put(path,contentB64,msg){return gh("/contents/"+path,{method:"PUT
 function step(txt,pct,det){$("sas-prog").style.display="block";$("sas-step").textContent=txt;$("sas-pbar").style.width=pct+"%";$("sas-det").innerHTML=det||""}
 $("sas-go").onclick=async()=>{
   if(!TOKEN){$("sas-setup").style.display="block";return}
-  const job={mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:$("sas-artimg").checked,commons:$("sas-commons").checked};
+  const job={mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
+  if(!files.length){$("sas-drop").scrollIntoView({block:"center"});$("sas-drop").style.borderColor="#ff6b6b";return alert("Ajoutez vos photos (5 conseillées).")}
   if(mode=="url"){job.url=$("sas-url").value.trim();if(!job.url)return alert("Collez le lien de l’article.")}
   else{job.text=$("sas-text").value.trim();job.title=$("sas-title").value.trim();if(!job.text)return alert("Collez le texte de l’article.")}
   const d=new Date(),p=n=>String(n).padStart(2,"0");const id=d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
