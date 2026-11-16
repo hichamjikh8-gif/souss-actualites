@@ -99,8 +99,14 @@ AR = LANG == "ar"
 log("Langue:", LANG)
 BYLINE = WP_AUTHOR or CFG.get("byline") or "Hicham Jikh Cheddad"
 if AR and BYLINE.strip().lower() in ("hicham jikh cheddad", "hicham jikh"): BYLINE = "هشام جيخ شداد"
+CAT_AR = {"économie": "اقتصاد", "sport": "رياضة", "politique": "سياسة", "société": "مجتمع", "culture": "ثقافة",
+          "international": "دولي", "actualités": "مستجدات", "actualité": "مستجدات", "l'actu du jour": "أخبار اليوم",
+          "tourisme": "سياحة", "business": "أعمال", "tendances": "توجهات", "enquêtes": "تحقيقات", "opinion": "رأي"}
 if (not CFG.get("rubrique") or CFG.get("rubrique", "").strip().lower() in ("actualité", "actualité · agadir")) and WP_CATS:
     CFG["rubrique"] = WP_CATS[0]
+if AR:
+    rub = (CFG.get("rubrique") or "").strip()
+    CFG["rubrique"] = CAT_AR.get(rub.lower().replace("’", "'"), rub if re.search(r"[\u0600-\u06FF]", rub) else "أخبار")
 log("Rubrique:", CFG.get("rubrique"), "| catégories WP:", WP_CATS)
 log("Titre:", TITLE, "| paragraphes:", len(PARAS), "| images article:", len(ARTICLE_IMGS))
 
@@ -153,7 +159,7 @@ else:
             if not ss: continue
             take = ss[:2] if i < 2 else ss[:1]
             for s in take:
-                if words > int(CFG.get("words", 150)): break
+                if words > int(CFG.get("words", 95 if AR else 150)): break
                 if len(s.split()) < 4 and i > 0: continue
                 LINES.append(s); words += len(s.split())
         log("Résumé extractif:", words, "mots")
@@ -200,7 +206,7 @@ if AR:
     def say(txt):
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
-            pv.synthesize_wav(txt, wf, syn_config=SynthesisConfig(length_scale=1.0 / speed))
+            pv.synthesize_wav(txt, wf, syn_config=SynthesisConfig(length_scale=0.88 / speed))
         buf.seek(0); a, r = sf.read(buf, dtype="float32"); return a, r
 else:
     from kokoro_onnx import Kokoro
@@ -557,13 +563,13 @@ CREDITS = [c for c in CREDITS if c]
 credit_txt = "Photos : " + ("Wikimedia Commons — " + ", ".join(dict.fromkeys(CREDITS)) if CREDITS else "Souss Actualités")
 if CREDITS and len(MEDIA) > len(CREDITS): credit_txt += " ; Souss Actualités"
 if CFG.get("musique", "elan") != "aucune": credit_txt += ". Musique originale."
-if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + (" — موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else "")
+if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else "")
 def outro(fr, a):
     ov = Image.new("RGBA", (W, H), (10, 10, 12, int(235 * a))); dd = ImageDraw.Draw(ov); al = int(255 * a)
     dd.rectangle((W / 2 - 6, 760, W / 2 + 6, 840), fill=ACCENT + (al,))
     rows = [("أخبار سوس" if AR else "SOUSS ACTUALITÉS", arfont(84) if AR else font("Inter-Black.otf", 78), 870, (255, 255, 255)),
-            ("souss-actualites.com", font("Inter-SemiBold.otf", 44), 990, ACCENT),
-            ((("عن مقال لـ " if mode != "complet" else "بقلم ") if AR else ("D’après un texte de " if mode != "complet" else "Un texte de ")) + BYLINE, F_KICK, 1080, (220, 220, 220))]
+            ("souss-actualites.com", font("Inter-SemiBold.otf", 44), 1005 if AR else 990, ACCENT),
+            ((("عن مقال لـ " if mode != "complet" else "بقلم ") if AR else ("D’après un texte de " if mode != "complet" else "Un texte de ")) + BYLINE, F_KICK, 1095 if AR else 1080, (220, 220, 220))]
     for txt, f, yy, col in rows:
         T(dd, ((W - tlen(dd, txt, f)) / 2, yy), txt, f, col + (al,))
     yy = 1680
