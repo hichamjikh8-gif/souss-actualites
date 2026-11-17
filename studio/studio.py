@@ -448,6 +448,8 @@ if CFG.get("musique", "elan") != "aucune":
 
 # ------------------------------------------------------------------ 6. montage
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # accepte les photos dont la fin du fichier est légèrement coupée
 W, H, FPS = 1080, 1920, 25
 F = HERE / "fonts"
 COULEURS = {"sport": (28, 168, 92), "politique": (214, 52, 52), "économie": (38, 118, 228), "business": (38, 118, 228),
