@@ -554,30 +554,54 @@ def Still(path):
             log("Effet 3D indisponible, zoom classique :", e)
     return Still2D(path)
 class Still2D:
-    """Photo plein écran avec mouvement « Ken Burns » bien visible."""
+    """Photo entière sur fond flou, filmée par une caméra virtuelle qui revient toujours à la photo complète.
+    Trois mouvements en alternance : zoom aller-retour, survol façon drone, descente en spirale vue d'en haut."""
     def __init__(self, path):
+        from PIL import ImageFilter, ImageEnhance
         im = Image.open(path).convert("RGB")
-        sc = max(W / im.width, H / im.height)
-        if sc > 1:  # agrandir une seule fois en bonne qualité
-            im = im.resize((int(im.width * sc * 1.0) + 1, int(im.height * sc) + 1), Image.LANCZOS)
-        self.im = im
-        self.land = im.width / im.height > W / H * 1.15
+        self.fit = min(W / im.width, H / im.height)          # échelle « photo entière »
+        self.land = im.width / im.height > 1.0
+        self.zmax = 2.1 if self.land else 1.45
+        k = min(max(1.0, self.fit * self.zmax), 3200 / max(im.width, im.height))
+        self.k = k  # pré-agrandissement LANCZOS : le zoom reste net même avec une petite photo
+        big = im.resize((max(1, round(im.width * k)), max(1, round(im.height * k))), Image.LANCZOS) if k > 1.01 else im
+        self.src = big.convert("RGBA"); self.iw, self.ih = big.size
+        sc = max(W / im.width, H / im.height) * 1.08
+        bg = im.resize((int(im.width * sc) + 1, int(im.height * sc) + 1), Image.BILINEAR)
+        bg = bg.crop(((bg.width - W) // 2, (bg.height - H) // 2, (bg.width - W) // 2 + W, (bg.height - H) // 2 + H))
+        bg = ImageEnhance.Brightness(bg.filter(ImageFilter.GaussianBlur(38))).enhance(0.55)
+        self.bg = bg.convert("RGBA")
+    @staticmethod
+    def _seg(p, a, b): return ease((p - a) / (b - a))
+    def _cam(self, p, idx):
+        """→ (zoom, u, v, angle°) ; zoom 1 = photo entière, u/v = point visé (0..1)."""
+        Z, m, sd = self.zmax, idx % 3, (idx // 3) % 2
+        if m == 0:      # zoom avant, petite dérive sur le détail, puis retour à la photo entière
+            q = self._seg(p, 0, 0.42) if p < 0.58 else 1 - self._seg(p, 0.58, 1)
+            tu, tv = [(0.5, 0.42), (0.38, 0.5), (0.62, 0.45), (0.5, 0.6)][(idx // 3) % 4]
+            drift = 0.06 * self._seg(p, 0.3, 0.7) * (1 if sd else -1)
+            return 1 + (Z - 1) * q, 0.5 + (tu + drift - 0.5) * q, 0.5 + (tv - 0.5) * q, 0.0
+        if m == 1:      # drone : il descend, survole la photo d'un bord à l'autre, puis remonte
+            a, b = (0.15, 0.85) if sd == 0 else (0.85, 0.15)
+            if p < 0.3:
+                q = self._seg(p, 0, 0.3); return 1 + (Z - 1) * q, 0.5 + (a - 0.5) * q, 0.5 - 0.06 * q, 2.5 * q
+            if p < 0.72:
+                q = self._seg(p, 0.3, 0.72); return Z, a + (b - a) * q, 0.44 + 0.1 * q, 2.5 - 4.5 * q
+            q = 1 - self._seg(p, 0.72, 1); return 1 + (Z - 1) * q, 0.5 + (b - 0.5) * q, 0.5 + 0.04 * q, -2.0 * q
+        # vue d'en haut : descente en spirale vers le centre, puis remontée
+        q = self._seg(p, 0, 0.55) if p < 0.62 else 1 - self._seg(p, 0.62, 1)
+        rot = (7.0 if sd == 0 else -7.0) * q
+        return 1 + (Z * 0.92 - 1) * q, 0.5, 0.5 - 0.05 * q, rot
     def frame(self, p, idx):
-        im = self.im; e = ease(p); ar = W / H
-        if self.land:   # photo horizontale : traversée de gauche à droite (ou l'inverse) + léger zoom
-            z = 1.0 + 0.10 * e
-            ch = im.height / z; cw = ch * ar
-            span = im.width - cw
-            x0 = span * (e if idx % 2 == 0 else 1 - e)
-            y0 = (im.height - ch) / 2
-        else:           # photo verticale : zoom avant/arrière marqué + petite dérive
-            zmax = 1.32
-            z = 1.0 + (zmax - 1.0) * (e if idx % 2 == 0 else 1 - e)
-            cw = min(im.width, im.height * ar) / z; ch = cw / ar
-            dx, dy = [(0.5, 0.35), (0.5, 0.65), (0.35, 0.5), (0.65, 0.5)][idx % 4]
-            x0 = (im.width - cw) * (0.5 + (dx - 0.5) * e)
-            y0 = (im.height - ch) * (0.5 + (dy - 0.5) * e)
-        return im.resize((W, H), Image.BILINEAR, box=(x0, y0, x0 + cw, y0 + ch))
+        z, u, v, ang = self._cam(min(max(p, 0), 1), idx)
+        s = self.fit / self.k * z                     # pixels écran par pixel source (pré-agrandi)
+        hw, hh = W / (2 * s), H / (2 * s)             # demi-champ visible, en pixels source
+        cx = min(max(u * self.iw, hw), self.iw - hw) if self.iw > 2 * hw else self.iw / 2
+        cy = min(max(v * self.ih, hh), self.ih - hh) if self.ih > 2 * hh else self.ih / 2
+        t = math.radians(ang); c, sn = math.cos(t) / s, math.sin(t) / s
+        data = (c, sn, cx - c * W / 2 - sn * H / 2, -sn, c, cy + sn * W / 2 - c * H / 2)
+        fg = self.src.transform((W, H), Image.AFFINE, data, Image.BILINEAR, fillcolor=(0, 0, 0, 0))
+        return Image.alpha_composite(self.bg, fg).convert("RGB")
 
 class Clip:
     """Vidéo fournie: plein écran (recadrée), sans son."""
