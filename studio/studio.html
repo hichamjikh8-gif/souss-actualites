@@ -90,7 +90,7 @@
       <button class="btn" id="sas-copy">📋 Copier le texte</button>
       <button class="btn" id="sas-del" style="border-color:#7a2b2b">🗑 Supprimer</button>
       <a class="btn" id="sas-thumb" href="#" target="_blank" style="display:none">🖼 Miniature YouTube</a><br>
-      <button class="btn" id="sas-wp" style="background:#2a1d12;border-color:#e6781e">📰 Ajouter à l’article</button>
+      <button class="btn" id="sas-wp" style="background:#2a1d12;border-color:#e6781e">📰 Publier sur Souss Actualités + Atlas Dépêche</button>
       <span class="muted" id="sas-wpst"></span><br>
       <div style="margin-top:14px;padding:14px;border:1px solid #3a404b;border-radius:10px">
         <b>Publier</b><br>
@@ -98,6 +98,7 @@
         <span class="muted">Sur téléphone : choisissez l’appli TikTok ou YouTube, la vidéo s’ouvre directement dedans. Le texte est copié, il suffit de le coller.</span><br>
         <button class="btn" id="sas-tt">🎵 TikTok (ordinateur)</button>
         <button class="btn" id="sas-yt">▶ YouTube (ordinateur)</button>
+        <button class="btn" id="sas-wa" style="background:#128c4a;border-color:#128c4a">💬 WhatsApp</button>
         <div class="muted" id="sas-pubst" style="margin-top:6px"></div>
       </div>
       <label>Texte pour les réseaux</label>
@@ -188,7 +189,7 @@ $("sas-wp").onclick=async()=>{
     st.textContent="Mise à jour de l’article…";
     const r=await fetch("/wp-json/wp/v2/posts/"+post.id,{method:"POST",credentials:"include",headers:Object.assign({"Content-Type":"application/json"},H),body:JSON.stringify({content:block+raw})});
     if(!r.ok)throw new Error("mise à jour refusée ("+r.status+")");
-    st.innerHTML='✅ Ajoutée. <a href="'+post.link+'" target="_blank" style="color:#e6781e">Voir l’article</a>';
+    CUR.link=post.link;st.innerHTML='✅ Publiée sur Souss Actualités. <a href="'+post.link+'" target="_blank" style="color:#e6781e">Voir l’article</a><br>Atlas Dépêche l’affiche automatiquement dans l’article d’ici 30 minutes environ.';
   }catch(e){st.innerHTML='<span class="err">'+e.message+'</span>'}
 };
 let CURTAG="";
@@ -224,7 +225,7 @@ async function show(rel){CURTAG=rel.tag_name;
   step("Terminé ✅",100);
   $("sas-result").style.display="block";
   $("sas-dl").href=mp4.browser_download_url;
-  const m=(rel.body||"").match(/(?:L'article complet|المقال كاملاً) : (\S+)/);CUR={blob:null,name:mp4.name,url:(m&&m[1].startsWith("http"))?m[1]:""};$("sas-wpst").textContent="";
+  const m=(rel.body||"").match(/(?:L'article complet|المقال كاملاً) : (\S+)/);CUR={blob:null,name:mp4.name,url:(m&&m[1].startsWith("http"))?m[1]:"",dl:mp4.browser_download_url,link:""};$("sas-wpst").textContent="";
   try{const rawu="https://raw.githubusercontent.com/"+OWNER+"/"+REPO+"/"+BRANCH+"/sorties/"+rel.tag_name.replace(/^job-/,"")+"/"+mp4.name;const rr=await fetch(rawu);if(!rr.ok)throw new Error("raw "+rr.status);const blob=await rr.blob();CUR.blob=blob;$("sas-video").src=URL.createObjectURL(blob);
       $("sas-dl").href=URL.createObjectURL(blob);$("sas-dl").download=mp4.name}catch(e){$("sas-video").src=mp4.browser_download_url}
   $("sas-desc").textContent=rel.body||"";
@@ -245,6 +246,16 @@ function pcPublish(url,name){
   window.open(url,"_blank");
   $("sas-pubst").innerHTML="✅ Vidéo téléchargée et texte copié.<br>Dans "+name+" : <b>1)</b> cliquez sur « Sélectionner » / « Importer » · <b>2)</b> ouvrez <b>Téléchargements</b> et double-cliquez sur la <b>première vidéo</b> · <b>3)</b> collez le texte (Ctrl+V) et publiez.";
 }
+$("sas-wa").onclick=async()=>{
+  if(!CUR.name)return;
+  const titre=($("sas-desc").textContent||"").split("\n")[0];
+  const lien=CUR.link||CUR.url||CUR.dl;
+  if(CUR.blob&&/Android|iPhone|iPad/i.test(navigator.userAgent)&&navigator.canShare&&navigator.canShare({files:[vidFile()]})){
+    try{await navigator.share({files:[vidFile()],text:titre+(lien?"\n"+lien:"")});return}catch(e){if(e&&e.name=="AbortError")return}
+  }
+  window.open("https://wa.me/?text="+encodeURIComponent(titre+"\n\n🎬 "+lien+"\n\nSouss Actualités"),"_blank");
+  $("sas-pubst").innerHTML="💬 WhatsApp s’ouvre : choisissez la personne et envoyez. Elle reçoit le titre et le lien pour regarder la vidéo.";
+};
 $("sas-tt").onclick=()=>pcPublish("https://www.tiktok.com/tiktokstudio/upload","TikTok");
 $("sas-yt").onclick=()=>pcPublish("https://studio.youtube.com/","YouTube");
 $("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textContent).then(()=>{$("sas-copy").textContent="✔ Copié"})};
