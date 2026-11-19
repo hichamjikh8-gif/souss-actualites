@@ -70,13 +70,17 @@ def paragraphs(content_html):
     return out
 
 WP_CATS, WP_AUTHOR = [], ""
+# Marque : "souss" (par défaut) ou "autre" → aucune mention de Souss Actualités (logo, nom, site, @, signature).
+NEUTRAL = CFG.get("marque", "souss") != "souss"
+BRAND_NAME = (CFG.get("marque_nom") or "").strip() if NEUTRAL else ""
+BRAND_SITE = (CFG.get("marque_site") or "").strip() if NEUTRAL else ""
 if CFG.get("url"):
     TITLE, CONTENT, ARTICLE_IMGS = from_url(CFG["url"].strip())
     PARAS = paragraphs(CONTENT)
 else:
     raw = CFG.get("text", "").strip()
     lines = [l.strip() for l in raw.splitlines() if l.strip()]
-    TITLE = CFG.get("title") or (lines[0] if lines else "Souss Actualités")
+    TITLE = CFG.get("title") or (lines[0] if lines else ("" if NEUTRAL else "Souss Actualités"))
     PARAS = lines[1:] if not CFG.get("title") else lines
     ARTICLE_IMGS = []
 if CFG.get("title"):
@@ -126,7 +130,7 @@ def claude_summary():
         return None
     art = "\n\n".join(PARAS)[:20000]
     prompt = (
-        "Tu es le rédacteur vidéo de Souss Actualités. À partir de l'article ci-dessous, écris le texte "
+        ("Tu es rédacteur vidéo" + (" pour " + BRAND_NAME if BRAND_NAME else "") if NEUTRAL else "Tu es le rédacteur vidéo de Souss Actualités") + ". À partir de l'article ci-dessous, écris le texte "
         "d'une vidéo verticale d'environ 60 secondes (140 à 160 mots), en français, fidèle à l'article "
         "(aucun fait ajouté, déclarations attribuées, hypothèses présentées comme telles). Phrases courtes, rythme journalistique, "
         "première phrase accrocheuse. Réponds UNIQUEMENT en JSON: "
@@ -633,15 +637,15 @@ def src(i):
 
 static = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(static)
 if AR:
-    d.rectangle((W - 82, 150, W - 70, 222), fill=ACCENT)
-    b = "أخبار سوس"; T(d, (W - 104 - tlen(d, b, F_BRAND), 140), b, F_BRAND, "white")
-    k = CFG.get("rubrique") or "أخبار"; T(d, (W - 106 - tlen(d, k, F_KICK), 205), k, F_KICK, ACCENT)
+    if not NEUTRAL or BRAND_NAME or CFG.get("rubrique"): d.rectangle((W - 82, 150, W - 70, 222), fill=ACCENT)
+    b = BRAND_NAME if NEUTRAL else "أخبار سوس"; T(d, (W - 104 - tlen(d, b, F_BRAND), 140), b, F_BRAND, "white")
+    k = CFG.get("rubrique") or ("" if NEUTRAL else "أخبار"); T(d, (W - 106 - tlen(d, k, F_KICK), 205), k, F_KICK, ACCENT)
     y = 290
     for l in textwrap.wrap(TITLE_SHOW, 32)[:4]: T(d, (W - 70 - tlen(d, l, F_TITLE), y), l, F_TITLE, "white"); y += 76
 else:
-    d.rectangle((70, 150, 82, 222), fill=ACCENT)
-    d.text((104, 148), "SOUSS ACTUALITÉS", font=F_BRAND, fill="white")
-    d.text((106, 202), CFG.get("rubrique", "ACTUALITÉ").upper(), font=F_KICK, fill=ACCENT)
+    if not NEUTRAL or BRAND_NAME or CFG.get("rubrique"): d.rectangle((70, 150, 82, 222), fill=ACCENT)
+    d.text((104, 148), BRAND_NAME.upper() if NEUTRAL else "SOUSS ACTUALITÉS", font=F_BRAND, fill="white")
+    d.text((106, 202), (CFG.get("rubrique") or ("" if NEUTRAL else "ACTUALITÉ")).upper(), font=F_KICK, fill=ACCENT)
     y = 300
     tl = textwrap.wrap(TITLE_SHOW, 30)[:4]
     for l in tl: d.text((70, y), l, font=F_TITLE, fill="white"); y += 70
@@ -653,14 +657,16 @@ for _y in range(H):
     _g.putpixel((0, _y), max(0, min(255, v)))
 _shade = Image.new("RGBA", (W, H), (0, 0, 0, 0)); _shade.putalpha(_g.resize((W, H)))
 static = Image.alpha_composite(_shade, static); d = ImageDraw.Draw(static)
-url = "souss-actualites.com"; d.text(((W - d.textlength(url, font=F_URL)) / 2, 1790), url, font=F_URL, fill=(235, 235, 235))
+url = BRAND_SITE if NEUTRAL else "souss-actualites.com"; d.text(((W - d.textlength(url, font=F_URL)) / 2, 1790), url, font=F_URL, fill=(235, 235, 235))
 
 CREDITS = [c for c in CREDITS if c]
 credit_txt = "Photos : " + ("Wikimedia Commons — " + ", ".join(dict.fromkeys(CREDITS)) if CREDITS else "Souss Actualités")
 if CREDITS and len(MEDIA) > len(CREDITS): credit_txt += " ; Souss Actualités"
 _mc = OUT / "music.wav.credit"
+if NEUTRAL: credit_txt = ("Photos : Wikimedia Commons — " + ", ".join(dict.fromkeys(CREDITS))) if CREDITS else (("Photos : " + BRAND_NAME) if BRAND_NAME else "")
 if CFG.get("musique", "elan") != "aucune": credit_txt += (". " + _mc.read_text() if _mc.exists() else ". Musique originale.")
-if AR and not CREDITS: credit_txt = "الصور: أخبار سوس" + (("، " + _mc.read_text()) if _mc.exists() else ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else ""))
+if NEUTRAL: credit_txt = credit_txt.lstrip(". ")
+if AR and not CREDITS and not NEUTRAL: credit_txt = "الصور: أخبار سوس" + (("، " + _mc.read_text()) if _mc.exists() else ("، موسيقى أصلية" if CFG.get("musique", "elan") != "aucune" else ""))
 # ---- Chiffres clés animés
 STOPU = {"de", "du", "des", "d'", "et", "à", "au", "aux", "en", "le", "la", "les", "un", "une", "sur", "pour", "par", "est", "sont", "a",
          "qui", "que", "où", "dans", "avec", "il", "elle", "ce", "cette", "ne", "n'est", "se", "sa", "son", "ses", "plus",
@@ -718,19 +724,27 @@ _intro_brand = Image.new("RGBA", (W, H), (0, 0, 0, 0)); _ib = ImageDraw.Draw(_in
 LOGO = HERE / "logo" / "logo.png"
 _card_w, _card_h = 820, 600
 _cy = 640
-_ib.rounded_rectangle(((W - _card_w) / 2, _cy, (W + _card_w) / 2, _cy + _card_h), radius=36, fill=(255, 255, 255, 255))
-if LOGO.exists():
+if NEUTRAL:
+    if BRAND_NAME:
+        _bf = arfont(110) if re.search(r"[\u0600-\u06FF]", BRAND_NAME) else font("Inter-Black.otf", 96)
+        while tlen(_ib, BRAND_NAME, _bf) > _card_w - 80 and _bf.size > 40: _bf = font("Inter-Black.otf", _bf.size - 8)
+        _ib.rounded_rectangle(((W - _card_w) / 2, _cy + 180, (W + _card_w) / 2, _cy + _card_h - 180), radius=36, fill=(255, 255, 255, 255))
+        T(_ib, ((W - tlen(_ib, BRAND_NAME, _bf)) / 2, _cy + _card_h / 2 - 60), BRAND_NAME, _bf, (20, 20, 20, 255))
+else:
+  _ib.rounded_rectangle(((W - _card_w) / 2, _cy, (W + _card_w) / 2, _cy + _card_h), radius=36, fill=(255, 255, 255, 255))
+  if LOGO.exists():
     _lg = Image.open(LOGO).convert("RGBA"); _lg.thumbnail((_card_w - 80, _card_h - 70), Image.LANCZOS)
     _intro_brand.alpha_composite(_lg, (int((W - _lg.width) / 2), int(_cy + (_card_h - _lg.height) / 2)))
-else:
+  else:
     _bf = arfont(110) if AR else font("Inter-Black.otf", 96); _bt = "أخبار سوس" if AR else "SOUSS ACTUALITÉS"
     T(_ib, ((W - tlen(_ib, _bt, _bf)) / 2, _cy + 240), _bt, _bf, (20, 20, 20, 255))
-_kt = CFG.get("rubrique") or ("أخبار" if AR else "Actualité")
+_kt = CFG.get("rubrique") or ("" if NEUTRAL else ("أخبار" if AR else "Actualité"))
 _kf = F_KICK if AR else font("Inter-Bold.otf", 40)
 _kt = _kt if AR else _kt.upper()
 _kw = tlen(_ib, _kt, _kf) + 80
-_ib.rounded_rectangle(((W - _kw) / 2, _cy + _card_h + 40, (W + _kw) / 2, _cy + _card_h + 120), radius=40, fill=ACCENT + (255,))
-T(_ib, ((W - tlen(_ib, _kt, _kf)) / 2, _cy + _card_h + 56), _kt, _kf, (255, 255, 255, 255))
+if _kt:
+    _ib.rounded_rectangle(((W - _kw) / 2, _cy + _card_h + 40, (W + _kw) / 2, _cy + _card_h + 120), radius=40, fill=ACCENT + (255,))
+    T(_ib, ((W - tlen(_ib, _kt, _kf)) / 2, _cy + _card_h + 56), _kt, _kf, (255, 255, 255, 255))
 def fade(img, a):
     if a >= 1: return img
     r_, g_, b_, al_ = img.split(); al_ = al_.point(lambda v: int(v * max(a, 0))); return Image.merge("RGBA", (r_, g_, b_, al_))
@@ -748,13 +762,19 @@ def intro(fr, t):
     return Image.alpha_composite(fr, layer)
 def outro(fr, a):
     ov = Image.new("RGBA", (W, H), (10, 10, 12, int(235 * a))); dd = ImageDraw.Draw(ov); al = int(255 * a)
-    dd.rectangle((W / 2 - 6, 760, W / 2 + 6, 840), fill=ACCENT + (al,))
+    if not (NEUTRAL and not BRAND_NAME and not BRAND_SITE): dd.rectangle((W / 2 - 6, 760, W / 2 + 6, 840), fill=ACCENT + (al,))
     rows = [("أخبار سوس" if AR else "SOUSS ACTUALITÉS", arfont(84) if AR else font("Inter-Black.otf", 78), 870, (255, 255, 255)),
             ("souss-actualites.com", font("Inter-SemiBold.otf", 44), 1005 if AR else 990, ACCENT),
             ((("عن مقال لـ " if mode != "complet" else "بقلم ") if AR else ("D’après un texte de " if mode != "complet" else "Un texte de ")) + BYLINE, F_KICK, 1095 if AR else 1080, (220, 220, 220)),
             ("تابعونا  @soussactualites" if AR else "Abonnez-vous  @soussactualites", arfont(40) if AR else font("Inter-Bold.otf", 40), 1230, (255, 255, 255))]
-    _sw = tlen(dd, rows[-1][0], rows[-1][1]) + 70
-    dd.rounded_rectangle(((W - _sw) / 2, 1212, (W + _sw) / 2, 1298), radius=43, fill=ACCENT + (al,))
+    if NEUTRAL:
+        _bfo = arfont(84) if re.search(r"[\u0600-\u06FF]", BRAND_NAME) else font("Inter-Black.otf", 78)
+        rows = [(BRAND_NAME.upper() if not re.search(r"[\u0600-\u06FF]", BRAND_NAME) else BRAND_NAME, _bfo, 870, (255, 255, 255)),
+                (BRAND_SITE, font("Inter-SemiBold.otf", 44), 990, ACCENT)]
+        rows = [r_ for r_ in rows if r_[0]]
+    else:
+        _sw = tlen(dd, rows[-1][0], rows[-1][1]) + 70
+        dd.rounded_rectangle(((W - _sw) / 2, 1212, (W + _sw) / 2, 1298), radius=43, fill=ACCENT + (al,))
     for txt, f, yy, col in rows:
         T(dd, ((W - tlen(dd, txt, f)) / 2, yy), txt, f, col + (al,))
     yy = 1680
@@ -764,7 +784,7 @@ def outro(fr, a):
 
 import unicodedata
 slug = re.sub(r"[^a-z0-9]+", "-", unicodedata.normalize("NFKD", TITLE.lower().replace("œ", "oe").replace("æ", "ae")).encode("ascii", "ignore").decode())[:60].strip("-") or "video"
-if slug == "video" or len(slug) < 6: slug = "souss-actualites-" + JOB.name
+if slug == "video" or len(slug) < 6: slug = ("video-" if NEUTRAL else "souss-actualites-") + JOB.name
 VIDEO = OUT / f"{slug}.mp4"
 has_music = (OUT / "music.wav").exists()
 _dl = int(INTRO * 1000)
@@ -830,7 +850,7 @@ try:
     for l in lines_t:
         x_ = (xb - tlen(dt_, l, ftt)) if AR else xb
         T(dt_, (x_ + 3, yy + 3), l, ftt, (0, 0, 0, 200)); T(dt_, (x_, yy), l, ftt, (255, 255, 255, 255)); yy += 92 if AR else 84
-    if LOGO.exists():
+    if LOGO.exists() and not NEUTRAL:
         lg = Image.open(LOGO).convert("RGBA"); lg.thumbnail((230, 166), Image.LANCZOS)
         card = Image.new("RGBA", (lg.width + 30, lg.height + 24), (0, 0, 0, 0))
         ImageDraw.Draw(card).rounded_rectangle((0, 0, card.width - 1, card.height - 1), radius=16, fill=(255, 255, 255, 255))
@@ -848,10 +868,13 @@ except Exception as e:
     log("Miniature YouTube impossible:", e)
 
 # ------------------------------------------------------------------ 7. textes réseaux sociaux
-art_url = CFG.get("url", "souss-actualites.com")
+art_url = CFG.get("url") or (BRAND_SITE if NEUTRAL else "souss-actualites.com")
 desc = (SOCIAL or {}).get("description") or (LINES[1] if len(LINES) > 1 else TITLE)
-tags = (SOCIAL or {}).get("hashtags") or (["#أخبار_سوس", "#المغرب", "#أكادير", "#سوس_ماسة", "#SoussActualités"] if AR else ["#SoussActualités", "#Maroc", "#Agadir", "#SoussMassa", "#Actualité"])
+tags = (SOCIAL or {}).get("hashtags") or ([] if NEUTRAL else ["#أخبار_سوس", "#المغرب", "#أكادير", "#سوس_ماسة", "#SoussActualités"] if AR else ["#SoussActualités", "#Maroc", "#Agadir", "#SoussMassa", "#Actualité"])
 social = f"{TITLE}\n\n{desc}\n\n{'المقال كاملاً' if AR else 'L' + chr(39) + 'article complet'} : {urllib.parse.unquote(art_url)}\n\n{' '.join(tags)}"
+if NEUTRAL:
+    tags = [t_ for t_ in tags if "souss" not in t_.lower() and "سوس" not in t_]
+    social = "\n\n".join(x for x in [TITLE, desc, urllib.parse.unquote(art_url), " ".join(tags)] if x)
 (OUT / "description.txt").write_text(social, encoding="utf-8")
 json.dump({"video": VIDEO.name, "title": TITLE, "duration": round(DUR, 1), "description": social, "log": LOG},
           open(OUT / "result.json", "w"), ensure_ascii=False, indent=1)

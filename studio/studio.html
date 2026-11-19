@@ -59,7 +59,12 @@
   </div>
   <div class="row">
     <div><label>Rubrique affichée</label><input type="text" id="sas-rub" value="" placeholder="Automatique (catégorie de l’article)"></div>
-    <div><label>Signature</label><input type="text" id="sas-by" value="Hicham Jikh Cheddad"></div>
+    <div id="sas-bybox"><label>Signature</label><input type="text" id="sas-by" value="Hicham Jikh Cheddad"></div>
+  </div>
+  <div class="row">
+    <div><label>Marque de la vidéo</label><select id="sas-marque"><option value="souss">📰 Souss Actualités (logo, site, signature)</option><option value="autre">✨ Autre marque / sans Souss Actualités (ZainBella…)</option></select></div>
+    <div id="sas-marquebox" style="display:none"><label>Nom affiché (facultatif)</label><input type="text" id="sas-mnom" placeholder="ex : ZainBella — vide = aucun nom">
+      <input type="text" id="sas-msite" placeholder="Site ou compte (facultatif), ex : zainbella.com" style="margin-top:6px"></div>
   </div>
 </div>
 
@@ -127,6 +132,7 @@
 const OWNER="hichamjikh8-gif", REPO="souss-actualites", BRANCH="videos", API="https://api.github.com/repos/"+OWNER+"/"+REPO;
 const $=id=>document.getElementById(id);
 let mode="url", files=[];
+$("sas-marque").onchange=()=>{const o=$("sas-marque").value!="souss";$("sas-marquebox").style.display=o?"":"none";$("sas-bybox").style.display=o?"none":"";if(o&&!$("sas-mnom").value)$("sas-mnom").focus()};
 let TOKEN=""; try{TOKEN=localStorage.getItem("sas_token")||""}catch(e){}
 if(!TOKEN) $("sas-setup").style.display="block";
 $("sas-savetok").onclick=()=>{TOKEN=$("sas-token").value.trim(); try{localStorage.setItem("sas_token",TOKEN)}catch(e){} $("sas-setup").style.display="none"; hist();};
@@ -146,7 +152,7 @@ async function put(path,contentB64,msg){return gh("/contents/"+path,{method:"PUT
 function step(txt,pct,det){$("sas-prog").style.display="block";$("sas-step").textContent=txt;$("sas-pbar").style.width=pct+"%";$("sas-det").innerHTML=det||""}
 $("sas-go").onclick=async()=>{
   if(!TOKEN){$("sas-setup").style.display="block";return}
-  const job={effet:$("sas-effet").value,langue:$("sas-lang").value,voix_fr:$("sas-voixfr").value,voix_ar:$("sas-voixar").value,mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
+  const job={marque:$("sas-marque").value,marque_nom:$("sas-mnom").value.trim(),marque_site:$("sas-msite").value.trim(),effet:$("sas-effet").value,langue:$("sas-lang").value,voix_fr:$("sas-voixfr").value,voix_ar:$("sas-voixar").value,mode:$("sas-mode").value,musique:$("sas-music").value,rubrique:$("sas-rub").value,byline:$("sas-by").value,photos_article:false,commons:false,seulement_mes_photos:true};
   if(!files.length){$("sas-drop").scrollIntoView({block:"center"});$("sas-drop").style.borderColor="#ff6b6b";return alert("Ajoutez vos photos (5 conseillées).")}
   if(mode=="url"){job.url=$("sas-url").value.trim();if(!job.url)return alert("Collez le lien de l’article.")}
   else{job.text=$("sas-text").value.trim();job.title=$("sas-title").value.trim();if(!job.text)return alert("Collez le texte de l’article.")}
