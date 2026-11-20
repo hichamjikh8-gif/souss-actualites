@@ -80,8 +80,15 @@ function sa_yt_fetch_videos() {
 		if ( ! preg_match( '/^[A-Za-z0-9_-]{6,20}$/', $id ) ) {
 			continue;
 		}
+		$href = '';
+		foreach ( $entry->link as $l ) {
+			if ( 'alternate' === (string) $l['rel'] ) {
+				$href = (string) $l['href'];
+			}
+		}
 		$videos[] = array(
 			'id'        => $id,
+			'short'     => ( false !== strpos( $href, '/shorts/' ) ),
 			'title'     => (string) $entry->title,
 			'published' => strtotime( (string) $entry->published ),
 		);
@@ -90,10 +97,12 @@ function sa_yt_fetch_videos() {
 }
 
 /* ---------- Bloc Embed (identique à celui de l'éditeur) ---------- */
-function sa_yt_embed_block( $id ) {
-	$u = 'https://www.youtube.com/shorts/' . $id;
-	return '<!-- wp:embed {"url":"' . $u . '","type":"video","providerNameSlug":"youtube","responsive":true,"className":"wp-embed-aspect-9-16 wp-has-aspect-ratio"} -->' . "\n"
-		. '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-9-16 wp-has-aspect-ratio"><div class="wp-block-embed__wrapper">' . "\n"
+// Short (vertical 9:16) ou vidéo classique (horizontale 16:9), d'après le lien du flux.
+function sa_yt_embed_block( $id, $short = true ) {
+	$u      = $short ? 'https://www.youtube.com/shorts/' . $id : 'https://www.youtube.com/watch?v=' . $id;
+	$aspect = $short ? 'wp-embed-aspect-9-16' : 'wp-embed-aspect-16-9';
+	return '<!-- wp:embed {"url":"' . $u . '","type":"video","providerNameSlug":"youtube","responsive":true,"className":"' . $aspect . ' wp-has-aspect-ratio"} -->' . "\n"
+		. '<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube ' . $aspect . ' wp-has-aspect-ratio"><div class="wp-block-embed__wrapper">' . "\n"
 		. $u . "\n"
 		. '</div></figure>' . "\n"
 		. '<!-- /wp:embed -->';
@@ -146,7 +155,7 @@ function sa_yt_autoembed_run() {
 			continue;
 		}
 
-		$block = sa_yt_embed_block( $v['id'] );
+		$block = sa_yt_embed_block( $v['id'], $v['short'] );
 		$close = '<!-- /wp:image -->';
 		$trim  = ltrim( $content );
 		if ( 0 === strpos( $trim, '<!-- wp:image' ) && false !== ( $pos = strpos( $content, $close ) ) ) {
