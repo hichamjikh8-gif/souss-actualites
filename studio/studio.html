@@ -103,6 +103,7 @@
         <span class="muted">Sur téléphone : choisissez l’appli TikTok ou YouTube, la vidéo s’ouvre directement dedans. Le texte est copié, il suffit de le coller.</span><br>
         <button class="btn" id="sas-tt">🎵 TikTok (ordinateur)</button>
         <button class="btn" id="sas-yt">▶ YouTube (ordinateur)</button>
+        <button class="btn" id="sas-dm" style="background:#1d1640;border-color:#7b61ff">🎬 Publier sur Dailymotion</button>
         <button class="btn" id="sas-wa" style="background:#128c4a;border-color:#128c4a">💬 WhatsApp</button>
         <div class="muted" id="sas-pubst" style="margin-top:6px"></div>
       </div>
@@ -264,6 +265,25 @@ $("sas-wa").onclick=async()=>{
 };
 $("sas-tt").onclick=()=>pcPublish("https://www.tiktok.com/tiktokstudio/upload","TikTok");
 $("sas-yt").onclick=()=>pcPublish("https://studio.youtube.com/","YouTube");
+// Dailymotion : la vidéo part seulement quand Hicham clique ici, après l'avoir revue.
+$("sas-dm").onclick=async()=>{
+  if(!CURTAG)return;const id=CURTAG.replace(/^job-/,""),st=$("sas-pubst"),btn=$("sas-dm");
+  const ask=p=>gh("/contents/dailymotion/"+p+"/"+id+".json?ref="+BRANCH);
+  const done=async()=>{const r=await ask("resultats");return r?JSON.parse(decodeURIComponent(escape(atob(r.content.replace(/\s/g,""))))):null};
+  const say=r=>{st.innerHTML=r.ok?'✅ Publiée sur Dailymotion : <a href="https://www.dailymotion.com/video/'+r.id+'" target="_blank">voir la vidéo</a>. Elle apparaîtra dans l’article (même titre) dans l’heure.':"❌ "+(r.error||"Échec")+' <button class="btn" id="sas-dm-retry">Réessayer</button>';const rb=document.getElementById("sas-dm-retry");if(rb)rb.onclick=()=>send(true)};
+  const send=async(retry)=>{btn.disabled=true;try{
+    const prev=await ask("demandes");
+    if(!retry){const r=await done();if(r&&r.ok){say(r);btn.disabled=false;return}}
+    if(retry||!prev){const res=await ask("resultats");if(res)await gh("/contents/dailymotion/resultats/"+id+".json",{method:"DELETE",body:JSON.stringify({message:"Dailymotion "+id+" [skip ci]",sha:res.sha,branch:BRANCH})});
+      const body={message:"Dailymotion "+id,content:b64(new TextEncoder().encode(JSON.stringify({job:id,t:Date.now()}))),branch:BRANCH};if(prev)body.sha=prev.sha;
+      await gh("/contents/dailymotion/demandes/"+id+".json",{method:"PUT",body:JSON.stringify(body)})}
+    st.textContent="⏳ Envoi vers Dailymotion… (2 à 5 minutes, vous pouvez rester sur cette page)";
+    for(let k=0;k<60;k++){await new Promise(z=>setTimeout(z,10000));const r=await done();if(r){say(r);btn.disabled=false;return}}
+    st.textContent="⏳ C’est plus long que prévu. Recliquez sur le bouton dans quelques minutes pour voir le résultat.";
+  }catch(e){st.textContent="❌ "+e.message}btn.disabled=false};
+  if(!confirm("Publier cette vidéo sur Dailymotion ?\nElle sera visible par tout le monde."))return;
+  send(false);
+};
 $("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textContent).then(()=>{$("sas-copy").textContent="✔ Copié"})};
 async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=15");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")&&!DELETED.has(r.tag_name)).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return '<span>'+"• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")+' <a href="#" class="sas-x" data-d="'+r.tag_name+'" title="Supprimer" style="color:#ff6b6b;text-decoration:none">🗑</a></span>'}).join("<br>")||"Aucune vidéo pour l’instant.";
   document.querySelectorAll("#sas-hist a[data-t]").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))});

@@ -55,14 +55,6 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python studio/studio.py "${{ steps.job.outputs.dir }}"
-      - name: Envoyer sur Dailymotion
-        if: steps.job.outputs.dir != ''
-        continue-on-error: true
-        timeout-minutes: 12
-        env:
-          DM_API_KEY: ${{ secrets.DM_API_KEY }}
-          DM_API_SECRET: ${{ secrets.DM_API_SECRET }}
-        run: python studio/dailymotion.py "${{ steps.job.outputs.dir }}"
       - name: Publier le résultat
         if: always() && steps.job.outputs.dir != ''
         env:

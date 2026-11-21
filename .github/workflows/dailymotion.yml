@@ -1,0 +1,65 @@
+name: Publier sur Dailymotion
+# Déclenché par le bouton « Publier sur Dailymotion » du Studio, qui dépose
+# dailymotion/demandes/<id>.json. Rien ne part sur Dailymotion sans ce clic.
+on:
+  push:
+    branches: [videos]
+    paths: ["dailymotion/demandes/*.json"]
+permissions:
+  contents: write
+concurrency:
+  group: dailymotion-${{ github.sha }}
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: videos
+          fetch-depth: 2
+          sparse-checkout: |
+            studio/dailymotion.py
+            dailymotion
+          sparse-checkout-cone-mode: false
+      - name: Trouver la demande
+        id: req
+        run: |
+          F=$(git diff --diff-filter=AM --name-only HEAD~1 HEAD | grep -E '^dailymotion/demandes/[^/]+\.json$' | head -1 || true)
+          if [ -z "$F" ]; then echo "Rien à faire"; exit 0; fi
+          ID=$(basename "$F" .json)
+          if ! echo "$ID" | grep -Eq '^[A-Za-z0-9._-]+$'; then echo "Identifiant invalide"; exit 0; fi
+          echo "id=$ID" >> $GITHUB_OUTPUT
+      - name: Récupérer la vidéo
+        if: steps.req.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/dm
+          gh release download "job-${{ steps.req.outputs.id }}" -R "$GITHUB_REPOSITORY" -D /tmp/dm -p '*.mp4' -p result.json || true
+      - name: Envoyer sur Dailymotion
+        if: steps.req.outputs.id != ''
+        env:
+          DM_API_KEY: ${{ secrets.DM_API_KEY }}
+          DM_API_SECRET: ${{ secrets.DM_API_SECRET }}
+        run: |
+          pip install -q requests
+          python studio/dailymotion.py /tmp/dm /tmp/resultat.json
+      - name: Rendre la réponse au Studio
+        if: always() && steps.req.outputs.id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f /tmp/resultat.json ] || echo '{"ok": false, "error": "Erreur inconnue, voir le journal GitHub Actions."}' > /tmp/resultat.json
+          python3 - "${{ steps.req.outputs.id }}" <<'PY'
+          import base64, os, sys, requests
+          i = sys.argv[1]
+          url = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/dailymotion/resultats/{i}.json"
+          h = {"Authorization": "Bearer " + os.environ["GH_TOKEN"]}
+          old = requests.get(url + "?ref=videos", headers=h)
+          body = {"message": f"Dailymotion {i} [skip ci]", "branch": "videos",
+                  "content": base64.b64encode(open("/tmp/resultat.json", "rb").read()).decode()}
+          if old.ok:
+              body["sha"] = old.json()["sha"]
+          print("réponse:", requests.put(url, headers=h, json=body).status_code)
+          PY
