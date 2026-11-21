@@ -39,8 +39,9 @@ def upload_v2(h, mp4, title, desc):
         sent = requests.post(s.json()["upload_url"], headers=h, files={"file": f}, timeout=600).json()
     r = requests.post(f"https://api.dailymotion.com/v2/profiles/{CHANNEL}/videos", timeout=60,
                       headers=dict(h, **{"Content-Type": "application/json", "accept": "application/json"}),
-                      json={"title": title, "description": desc, "category": "news", "visibility": "public",
-                            "is_for_kids": False, "source": {"file_url": sent["url"]}})
+                      json=dict({"title": title, "category": "news", "visibility": "public",
+                                 "is_for_kids": False, "source": {"file_url": sent["url"]}},
+                                **({"description": desc.strip()} if desc.strip() else {})))
     print("création:", r.status_code, r.text[:300])
     if r.status_code in (200, 201):
         b = r.json() if r.text else {}
