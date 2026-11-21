@@ -15,6 +15,18 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Lecteur « Souss Actualités » créé sur Dailymotion : depuis 2025, une vidéo
+// intégrée sans Player ID est refusée (« Forbidden ») et n'est pas monétisée.
+define( 'SA_DM_PLAYER_ID', 'x1ow3m' );
+
+// L'éditeur WordPress (aperçu) et tout affichage classique utilisent aussi ce lecteur.
+add_filter( 'oembed_fetch_url', function ( $url ) {
+	if ( false !== strpos( $url, 'dailymotion.com/services/oembed' ) ) {
+		$url = add_query_arg( 'player', SA_DM_PLAYER_ID, $url );
+	}
+	return $url;
+} );
+
 function sa_dml_video_id( $url ) {
 	if ( preg_match( '~(?:dailymotion\.com/(?:video|embed/video)/|dai\.ly/)([A-Za-z0-9]{5,20})~', (string) $url, $m ) ) {
 		return $m[1];
@@ -77,7 +89,7 @@ add_action( 'wp_footer', function () {
 	document.addEventListener('click',function(e){
 		var b=e.target.closest&&e.target.closest('.sa-dml-btn');if(!b)return;
 		var f=document.createElement('iframe');
-		f.src='https://www.dailymotion.com/embed/video/'+encodeURIComponent(b.getAttribute('data-dm'))+'?autoplay=1';
+		f.src='https://geo.dailymotion.com/player/<?php echo esc_js( SA_DM_PLAYER_ID ); ?>.html?video='+encodeURIComponent(b.getAttribute('data-dm'))+'&autoplay=1';f.referrerPolicy='strict-origin-when-cross-origin';
 		f.allow='autoplay; fullscreen; picture-in-picture; web-share';f.allowFullscreen=true;f.title=b.getAttribute('aria-label')||'Vidéo';
 		b.style.visibility='hidden';b.parentNode.appendChild(f);
 	});
@@ -107,7 +119,7 @@ add_action( 'wp_head', function () {
 		'description'  => '' !== trim( $desc ) ? $desc : $name,
 		'thumbnailUrl' => array( 'https://www.dailymotion.com/thumbnail/video/' . $id ),
 		'uploadDate'   => get_post_time( 'c', true, $post ),
-		'embedUrl'     => 'https://www.dailymotion.com/embed/video/' . $id,
+		'embedUrl'     => 'https://geo.dailymotion.com/player/' . SA_DM_PLAYER_ID . '.html?video=' . $id,
 		'publisher'    => array( '@type' => 'NewsMediaOrganization', 'name' => 'Souss Actualités', 'url' => home_url( '/' ) ),
 	);
 	echo "\n<script type=\"application/ld+json\">" . wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) . "</script>\n";
