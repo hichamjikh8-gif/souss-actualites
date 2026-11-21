@@ -1,0 +1,3 @@
+# Vendeurs autorisés pour souss-actualites.com
+# Dailymotion (ligne obligatoire indiquée par Dailymotion pour la monétisation des vidéos intégrées)
+google.com, pub-7019376976432612, RESELLER, f08c47fec0942fa0
