@@ -24,11 +24,30 @@ def token(key, secret):
             r = requests.post(url, timeout=30, data={"grant_type": "client_credentials", "client_id": key,
                                                      "client_secret": secret, "scope": scope})
             if r.ok and r.json().get("access_token"):
-                return r.json()["access_token"]
+                return r.json()["access_token"], ("v2" if "v2" in url else "v1")
             print("jeton refusé par", url, r.status_code, r.text[:200])
         except Exception as e:
             print("jeton impossible via", url, e)
-    return None
+    return None, None
+
+
+def upload_v2(h, mp4, title, desc):
+    s = requests.post("https://api.dailymotion.com/v2/files/upload_sessions", headers=h, timeout=30)
+    print("session:", s.status_code)
+    s.raise_for_status()
+    with open(mp4, "rb") as f:
+        sent = requests.post(s.json()["upload_url"], headers=h, files={"file": f}, timeout=600).json()
+    r = requests.post(f"https://api.dailymotion.com/v2/profiles/{CHANNEL}/videos", timeout=60,
+                      headers=dict(h, **{"Content-Type": "application/json", "accept": "application/json"}),
+                      json={"title": title, "description": desc, "category": "news", "visibility": "public",
+                            "is_for_kids": False, "source": {"file_url": sent["url"]}})
+    print("création:", r.status_code, r.text[:300])
+    if r.status_code in (200, 201):
+        b = r.json() if r.text else {}
+        vid = b.get("video_id") or b.get("id") or r.headers.get("Location", "").rstrip("/").split("/")[-1]
+        if vid:
+            return {"ok": True, "id": vid}
+    return {"ok": False, "error": "Dailymotion a refusé la vidéo (" + str(r.status_code) + ")."}
 
 
 def publish(d):
@@ -48,10 +67,13 @@ def publish(d):
     import re
     for n, v in (("clé", key), ("secret", secret)):
         print(n, "longueur", len(v), "hex" if re.fullmatch(r"[0-9a-fA-F]+", v) else "autre format")
-    tok = token(key, secret)
+    tok, kind = token(key, secret)
     if not tok:
         return {"ok": False, "error": "Dailymotion refuse les clés. Vérifiez-les."}
     h = {"Authorization": "Bearer " + tok}
+    print("jeton obtenu via", kind)
+    if kind == "v2":
+        return upload_v2(h, vids[0], title, (res.get("description") or "")[:3000])
     up = requests.get(API + "/rest/file/upload", headers=h, timeout=30).json()
     with open(vids[0], "rb") as f:
         sent = requests.post(up["upload_url"], headers=h, files={"file": f}, timeout=600).json()
