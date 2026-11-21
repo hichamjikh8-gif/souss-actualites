@@ -150,7 +150,7 @@ function sa_yt_autoembed_run() {
 		$content = (string) $post->post_content;
 
 		// Déjà une vidéo YouTube dans l'article : on ne touche à rien.
-		if ( false !== strpos( $content, $v['id'] ) || false !== strpos( $content, 'wp-block-embed-youtube' ) ) {
+		if ( false !== strpos( $content, $v['id'] ) || false !== strpos( $content, 'wp-block-embed-youtube' ) || false !== strpos( $content, 'wp-block-embed-dailymotion' ) ) {
 			$done[] = $v['id'];
 			continue;
 		}
