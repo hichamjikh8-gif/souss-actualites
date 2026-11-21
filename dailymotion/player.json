@@ -1,1 +1,1 @@
-{"ok": false, "error": "422 Client Error: Unprocessable Entity for url: https://api.dailymotion.com/v2/profiles/x6p981e/players?fields=player_id,label,endpoints.iframe_url,endpoints.lib_url"}
+{"ok": true, "player_id": "x1ow3m", "raw": {"player_id": "x1ow3m", "name": "Souss Actualités", "created_at": "2026-11-21T20:34:26Z"}}
