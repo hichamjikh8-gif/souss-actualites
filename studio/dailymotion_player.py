@@ -18,7 +18,7 @@ def main(out_path):
     print("jeton:", r.status_code, r.text[:200] if not r.ok else "")
     r.raise_for_status()
     h = {"Authorization": "Bearer " + r.json()["access_token"], "accept": "application/json"}
-    fields = "?fields=player_id,label,endpoints.iframe_url,endpoints.lib_url"
+    fields = "?fields=player_id,name,endpoints.iframe_url,endpoints.lib_url"
     lst = requests.get(f"{V2}/profiles/{CHANNEL}/players" + fields, headers=h, timeout=30)
     print("liste:", lst.status_code, lst.text[:500])
     players = []
@@ -27,7 +27,7 @@ def main(out_path):
         players = b.get("list") or b.get("data") or b.get("players") or (b if isinstance(b, list) else [])
     if not players:
         c = requests.post(f"{V2}/profiles/{CHANNEL}/players" + fields, headers=dict(h, **{"Content-Type": "application/json"}),
-                          json={"label": "Souss Actualités"}, timeout=30)
+                          json={"name": "Souss Actualités"}, timeout=30)
         print("création:", c.status_code, c.text[:500])
         c.raise_for_status()
         players = [c.json()]
