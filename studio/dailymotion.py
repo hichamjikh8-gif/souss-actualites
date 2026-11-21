@@ -56,9 +56,14 @@ def publish(d):
         return {"ok": False, "error": "Clés Dailymotion absentes dans GitHub."}
     vids = glob.glob(os.path.join(d, "*.mp4"))
     res_f = os.path.join(d, "result.json")
-    if not vids or not os.path.exists(res_f):
+    if not vids:
         return {"ok": False, "error": "Vidéo introuvable."}
-    res = json.load(open(res_f, encoding="utf-8"))
+    if os.path.exists(res_f):
+        res = json.load(open(res_f, encoding="utf-8"))
+    else:
+        # Vidéo retirée de la liste du Studio : on reprend le titre de la commande d'origine.
+        job_f = os.path.join(d, "job.json")
+        res = json.load(open(job_f, encoding="utf-8")) if os.path.exists(job_f) else {}
     title = (res.get("title") or "").strip()[:255]
     if not title:
         return {"ok": False, "error": "Titre manquant."}

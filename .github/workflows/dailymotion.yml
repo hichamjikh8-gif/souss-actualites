@@ -37,6 +37,12 @@ jobs:
         run: |
           mkdir -p /tmp/dm
           gh release download "job-${{ steps.req.outputs.id }}" -R "$GITHUB_REPOSITORY" -D /tmp/dm -p '*.mp4' -p result.json || true
+          if ! ls /tmp/dm/*.mp4 >/dev/null 2>&1; then
+            ID="${{ steps.req.outputs.id }}"
+            git sparse-checkout add "sorties/$ID" "jobs/$ID/job.json"
+            cp sorties/$ID/*.mp4 /tmp/dm/ 2>/dev/null || true
+            cp jobs/$ID/job.json /tmp/dm/ 2>/dev/null || true
+          fi
       - name: Envoyer sur Dailymotion
         if: steps.req.outputs.id != ''
         env:
