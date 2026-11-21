@@ -79,7 +79,7 @@ add_filter( 'render_block', function ( $html, $block ) {
 	// Le bouton porte son propre ratio : on retire celui de WordPress pour ne pas doubler la hauteur.
 	$class = trim( preg_replace( '~\s*(wp-has-aspect-ratio|wp-embed-aspect-[0-9-]+)~', '', $class ) );
 	$thumb    = sa_dml_thumb( $id );
-	$title    = esc_attr( wp_strip_all_tags( get_the_title() ) );
+	$title    = esc_attr( wp_strip_all_tags( (string) get_post_field( 'post_title', get_the_ID() ) ) ); // pas get_the_title() : d'autres modules y ajoutent du texte
 
 	return '<figure class="' . esc_attr( $class ) . ' sa-dml">'
 		. '<div class="wp-block-embed__wrapper">'
@@ -104,7 +104,7 @@ add_action( 'wp_footer', function () {
 	.sa-dml-play{position:absolute;left:50%;top:50%;width:72px;height:72px;margin:-36px 0 0 -36px;border-radius:50%;background:rgba(0,0,0,.65)}
 	.sa-dml-play::after{content:"";position:absolute;left:29px;top:22px;border-style:solid;border-width:14px 0 14px 22px;border-color:transparent transparent transparent #fff}
 	.sa-dml-btn:hover .sa-dml-play{background:#e6781e}
-	.sa-dml iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+	.sa-dml iframe{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;max-height:none!important;border:0}
 	</style>
 	<script>
 	document.addEventListener('click',function(e){
