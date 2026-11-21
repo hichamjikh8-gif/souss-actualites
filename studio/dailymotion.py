@@ -62,12 +62,13 @@ def main(job_dir):
         "description": (res.get("description") or "")[:3000],
         "channel": "news",
         "published": "true",
-        "private": "false",
+        # En privé : personne ne la voit avant que Hicham l'ait revue dans le Studio.
+        "private": "true",
         "is_created_for_kids": "false",
     })
     if r.ok and r.json().get("id"):
         vid = r.json()["id"]
-        print("Dailymotion: vidéo publiée https://www.dailymotion.com/video/" + vid)
+        print("Dailymotion: vidéo envoyée en privé https://www.dailymotion.com/video/" + vid)
         json.dump({"id": vid}, open(os.path.join(job_dir, "out", "dailymotion.json"), "w"))
     else:
         print("Dailymotion: création refusée", r.status_code, r.text[:300])
