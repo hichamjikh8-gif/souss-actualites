@@ -44,6 +44,10 @@ def publish(d):
     if not title:
         return {"ok": False, "error": "Titre manquant."}
 
+    # Diagnostic sans rien révéler : longueur et type de caractères des clés.
+    import re
+    for n, v in (("clé", key), ("secret", secret)):
+        print(n, "longueur", len(v), "hex" if re.fullmatch(r"[0-9a-fA-F]+", v) else "autre format")
     tok = token(key, secret)
     if not tok:
         return {"ok": False, "error": "Dailymotion refuse les clés. Vérifiez-les."}

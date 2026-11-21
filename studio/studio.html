@@ -103,7 +103,10 @@
         <span class="muted">Sur téléphone : choisissez l’appli TikTok ou YouTube, la vidéo s’ouvre directement dedans. Le texte est copié, il suffit de le coller.</span><br>
         <button class="btn" id="sas-tt">🎵 TikTok (ordinateur)</button>
         <button class="btn" id="sas-yt">▶ YouTube (ordinateur)</button>
+<<<<<<< HEAD
         <button class="btn" id="sas-dm" style="background:#1d1640;border-color:#7b61ff">🎬 Publier sur Dailymotion</button>
+=======
+>>>>>>> 034fadd (média 20261121-172841)
         <button class="btn" id="sas-wa" style="background:#128c4a;border-color:#128c4a">💬 WhatsApp</button>
         <div class="muted" id="sas-pubst" style="margin-top:6px"></div>
       </div>
@@ -265,6 +268,7 @@ $("sas-wa").onclick=async()=>{
 };
 $("sas-tt").onclick=()=>pcPublish("https://www.tiktok.com/tiktokstudio/upload","TikTok");
 $("sas-yt").onclick=()=>pcPublish("https://studio.youtube.com/","YouTube");
+<<<<<<< HEAD
 // Dailymotion : la vidéo part seulement quand Hicham clique ici, après l'avoir revue.
 $("sas-dm").onclick=async()=>{
   if(!CURTAG)return;const id=CURTAG.replace(/^job-/,""),st=$("sas-pubst"),btn=$("sas-dm");
@@ -284,6 +288,8 @@ $("sas-dm").onclick=async()=>{
   if(!confirm("Publier cette vidéo sur Dailymotion ?\nElle sera visible par tout le monde."))return;
   send(false);
 };
+=======
+>>>>>>> 034fadd (média 20261121-172841)
 $("sas-copy").onclick=()=>{navigator.clipboard.writeText($("sas-desc").textContent).then(()=>{$("sas-copy").textContent="✔ Copié"})};
 async function hist(){if(!TOKEN){$("sas-hist").textContent="";return}try{const rels=await gh("/releases?per_page=15");$("sas-hist").innerHTML=(rels||[]).filter(r=>r.tag_name.startsWith("job-")&&!DELETED.has(r.tag_name)).map(r=>{const m=r.assets.find(a=>a.name.endsWith(".mp4"));return '<span>'+"• "+(m?'<a href="#" data-t="'+r.tag_name+'">'+r.name+" — "+(r.body||"").split("\n")[0]+"</a>":r.name+" (échec)")+' <a href="#" class="sas-x" data-d="'+r.tag_name+'" title="Supprimer" style="color:#ff6b6b;text-decoration:none">🗑</a></span>'}).join("<br>")||"Aucune vidéo pour l’instant.";
   document.querySelectorAll("#sas-hist a[data-t]").forEach(a=>a.onclick=async e=>{e.preventDefault();show(await gh("/releases/tags/"+a.dataset.t))});
