@@ -36,59 +36,93 @@ function sa_dml_video_id( $url ) {
 
 $GLOBALS['sa_dml_ids'] = array();
 
-// Image en haute définition (l'adresse par défaut de Dailymotion ne donne qu'une petite vignette floue).
-function sa_dml_thumb( $id ) {
-	$key = 'sa_dml_thumb_' . $id;
-	$url = get_transient( $key );
-	if ( false === $url ) {
-		$url  = '';
-		$resp = wp_remote_get( 'https://api.dailymotion.com/video/' . rawurlencode( $id ) . '?fields=thumbnail_1080_url,thumbnail_720_url', array( 'timeout' => 5 ) );
+// Image en haute définition et format (vertical ou non), mis en cache une semaine.
+function sa_dml_info( $id ) {
+	$key  = 'sa_dml_info_' . $id;
+	$info = get_transient( $key );
+	if ( ! is_array( $info ) ) {
+		$info = array( 'thumb' => '', 'vertical' => null );
+		$resp = wp_remote_get( 'https://api.dailymotion.com/video/' . rawurlencode( $id ) . '?fields=thumbnail_1080_url,thumbnail_720_url,aspect_ratio', array( 'timeout' => 5 ) );
 		if ( ! is_wp_error( $resp ) && 200 === (int) wp_remote_retrieve_response_code( $resp ) ) {
 			$d = json_decode( wp_remote_retrieve_body( $resp ), true );
 			if ( ! empty( $d['thumbnail_1080_url'] ) ) {
-				$url = $d['thumbnail_1080_url'];
+				$info['thumb'] = $d['thumbnail_1080_url'];
 			} elseif ( ! empty( $d['thumbnail_720_url'] ) ) {
-				$url = $d['thumbnail_720_url'];
+				$info['thumb'] = $d['thumbnail_720_url'];
+			}
+			if ( isset( $d['aspect_ratio'] ) && (float) $d['aspect_ratio'] > 0 ) {
+				$info['vertical'] = ( (float) $d['aspect_ratio'] < 1 );
 			}
 		}
-		set_transient( $key, $url, $url ? WEEK_IN_SECONDS : HOUR_IN_SECONDS );
+		set_transient( $key, $info, $info['thumb'] ? WEEK_IN_SECONDS : HOUR_IN_SECONDS );
 	}
-	return $url ? $url : 'https://www.dailymotion.com/thumbnail/video/' . rawurlencode( $id );
+	if ( ! $info['thumb'] ) {
+		$info['thumb'] = 'https://www.dailymotion.com/thumbnail/video/' . rawurlencode( $id );
+	}
+	return $info;
 }
 
-add_filter( 'render_block', function ( $html, $block ) {
-	if ( is_admin() || is_feed() || 'core/embed' !== $block['blockName'] ) {
-		return $html;
-	}
-	$attrs = isset( $block['attrs'] ) ? $block['attrs'] : array();
-	if ( empty( $attrs['providerNameSlug'] ) || 'dailymotion' !== $attrs['providerNameSlug'] ) {
-		return $html;
-	}
-	$id = sa_dml_video_id( isset( $attrs['url'] ) ? $attrs['url'] : '' );
-	if ( ! $id ) {
-		return $html;
-	}
+function sa_dml_player_html( $id, $vertical ) {
 	$GLOBALS['sa_dml_ids'][] = $id;
-
-	// On garde la <figure> d'origine (classes de ratio 16:9 / 9:16 de WordPress) et on remplace seulement son contenu.
-	$class = 'wp-block-embed is-type-video is-provider-dailymotion wp-block-embed-dailymotion';
-	if ( preg_match( '~<figure[^>]*class="([^"]*)"~', $html, $m ) ) {
-		$class = $m[1];
-	}
-	$vertical = ( false !== strpos( $class, 'aspect-9-16' ) );
-	// Le bouton porte son propre ratio : on retire celui de WordPress pour ne pas doubler la hauteur.
-	$class = trim( preg_replace( '~\s*(wp-has-aspect-ratio|wp-embed-aspect-[0-9-]+)~', '', $class ) );
-	$thumb    = sa_dml_thumb( $id );
-	$title    = esc_attr( wp_strip_all_tags( (string) get_post_field( 'post_title', get_the_ID() ) ) ); // pas get_the_title() : d'autres modules y ajoutent du texte
-
-	return '<figure class="' . esc_attr( $class ) . ' sa-dml">'
+	$info  = sa_dml_info( $id );
+	$title = esc_attr( wp_strip_all_tags( (string) get_post_field( 'post_title', get_the_ID() ) ) ); // pas get_the_title() : d'autres modules y ajoutent du texte
+	return '<figure class="wp-block-embed is-type-video is-provider-dailymotion wp-block-embed-dailymotion sa-dml">'
 		. '<div class="wp-block-embed__wrapper">'
 		. '<button type="button" class="sa-dml-btn' . ( $vertical ? ' sa-dml-v' : '' ) . '" data-dm="' . esc_attr( $id ) . '" aria-label="Lire la vidéo : ' . $title . '">'
-		. '<img src="' . esc_url( $thumb ) . '" alt="' . $title . '" loading="lazy" decoding="async">'
+		. '<img src="' . esc_url( $info['thumb'] ) . '" alt="' . $title . '" loading="lazy" decoding="async">'
 		. '<span class="sa-dml-play" aria-hidden="true"></span>'
 		. '</button>'
 		. '</div></figure>';
+}
+
+// Lecteur léger pour : le bloc Embed Dailymotion, mais aussi un lien Dailymotion collé
+// par erreur dans un bloc Image (cas réel : le rédacteur colle le lien dans « Image »).
+add_filter( 'render_block', function ( $html, $block ) {
+	if ( is_admin() || is_feed() ) {
+		return $html;
+	}
+	$name  = isset( $block['blockName'] ) ? $block['blockName'] : '';
+	$attrs = isset( $block['attrs'] ) ? $block['attrs'] : array();
+	if ( 'core/embed' === $name && isset( $attrs['providerNameSlug'] ) && 'dailymotion' === $attrs['providerNameSlug'] ) {
+		$id = sa_dml_video_id( isset( $attrs['url'] ) ? $attrs['url'] : '' );
+	} elseif ( 'core/image' === $name ) {
+		$src = isset( $attrs['url'] ) ? $attrs['url'] : '';
+		if ( ! $src && preg_match( '~<img[^>]+src="([^"]+)"~', $html, $m ) ) {
+			$src = html_entity_decode( $m[1] );
+		}
+		$id = sa_dml_video_id( $src );
+	} else {
+		return $html;
+	}
+	if ( ! $id ) {
+		return $html;
+	}
+	$info     = sa_dml_info( $id );
+	$vertical = null !== $info['vertical'] ? $info['vertical'] : ( false !== strpos( (string) ( isset( $attrs['className'] ) ? $attrs['className'] : '' ), 'aspect-9-16' ) );
+	return sa_dml_player_html( $id, $vertical );
 }, 20, 2 );
+
+// Dans l'éditeur : un lien Dailymotion collé dans un bloc Image devient tout de suite un vrai bloc vidéo.
+add_action( 'enqueue_block_editor_assets', function () {
+	wp_add_inline_script( 'wp-blocks', <<<'JS'
+(function(){
+	if(!window.wp||!wp.data||!wp.blocks)return;
+	var re=/(?:dailymotion\.com\/(?:video|embed\/video)\/|dai\.ly\/)([A-Za-z0-9]{5,20})/,busy=false;
+	function walk(list){list.forEach(function(b){
+		if(b.name==='core/image'&&b.attributes&&re.test(b.attributes.url||'')){
+			var id=(b.attributes.url.match(re)||[])[1];
+			wp.data.dispatch('core/block-editor').replaceBlock(b.clientId,wp.blocks.createBlock('core/embed',{url:'https://dailymotion.com/video/'+id,providerNameSlug:'dailymotion',type:'video',responsive:true}));
+		}
+		if(b.innerBlocks&&b.innerBlocks.length)walk(b.innerBlocks);
+	});}
+	wp.domReady(function(){wp.data.subscribe(function(){
+		if(busy)return;var ed=wp.data.select('core/block-editor');if(!ed)return;
+		busy=true;try{walk(ed.getBlocks());}finally{busy=false;}
+	});});
+})();
+JS
+	);
+} );
 
 add_action( 'wp_footer', function () {
 	if ( empty( $GLOBALS['sa_dml_ids'] ) ) {
