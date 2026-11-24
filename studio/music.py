@@ -1,4 +1,4 @@
-"""Musique originale générée (libre de droits). Usage: music.py sortie.wav durée [elan|calme|dramatique]"""
+"""Musique originale générée (libre de droits). Usage: music.py sortie.wav durée [elan|calme|dramatique|<morceau classique>]"""
 import numpy as np, soundfile as sf, sys
 OUTF, DUR = sys.argv[1], float(sys.argv[2]); MOOD = sys.argv[3] if len(sys.argv) > 3 else "elan"
 # ---- Musique classique (enregistrements du domaine public / libres, Wikimedia Commons)
@@ -12,6 +12,34 @@ CLASSIQUE = {
     "chopin_nocturne": ("File:Chopin Nocturne No. 2 in E Flat Major, Op. 9.ogg", "Chopin – Nocturne op. 9 n°2"),
     "bach_air": ("File:Air (Bach).ogg", "Bach – Air de la Suite n°3"),
 }
+# ---- Nouvelles mélodies (téléchargées depuis Wikimedia Commons au premier usage, puis gardées en cache)
+NOUVELLES = {
+    "debussy_lune": ("File:Clair de lune (Claude Debussy) Suite bergamasque.ogg", "Debussy – Clair de lune", "Claude Debussy", "Public domain"),
+    "debussy_arabesque": ("File:Claude Debussy - Première Arabesque - Patrizia Prati.ogg", "Debussy – Première Arabesque", "Patrizia Prati", "CC BY-SA 4.0"),
+    "grieg_matin": ("File:Henrik Ibsen, Edvard Grieg - Morgenstemning (Morning Mood).ogg", "Grieg – Au matin (Peer Gynt)", "Pracchia-78", "Public domain"),
+    "dvorak_largo": ("File:Antonin Dvorak - symphony no. 9 in e minor 'from the new world', op. 95 - ii. largo.ogg", "Dvořák – Symphonie du Nouveau Monde (Largo)", "Musopen", "Public domain"),
+    "handel_saba": ("File:Handel - Arrival of the Queen of Sheba.ogg", "Haendel – L’Arrivée de la reine de Saba", "Wikimedia Commons", "CC BY-SA 2.0"),
+    "vivaldi_hiver": ("File:Vivaldi - Four Seasons 4 Winter mvt 1 Allegro non molto - John Harrison violin.oga", "Vivaldi – L’Hiver", "John Harrison", "CC BY-SA 4.0"),
+    "albeniz_leyenda": ("File:Isaac Albeniz - suite espanola op. 47 - leyenda.ogg", "Albéniz – Asturias (Leyenda)", "Musopen", "Public domain"),
+    "tarrega_alhambra": ("File:Recuerdos de la Alhambra.ogg", "Tárrega – Souvenirs de l’Alhambra", "Carlo Alberto Boni", "CC BY-SA 3.0"),
+}
+for _k, (_t, _n, _a, _l) in NOUVELLES.items(): CLASSIQUE[_k] = (_t, _n)
+
+def telecharger(cle, dest):
+    """Télécharge une mélodie de Commons (une seule fois). Renvoie True si le fichier est prêt."""
+    import urllib.request, urllib.parse
+    if dest.exists() and dest.stat().st_size > 50000: return True
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    url = "https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(NOUVELLES[cle][0][5:].replace(" ", "_"))
+    for _ in range(3):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "SoussActualitesStudio/1.0 (https://souss-actualites.com)"})
+            data = urllib.request.urlopen(req, timeout=90).read()
+            if len(data) > 50000: dest.write_bytes(data); return True
+        except Exception as e:
+            print("téléchargement musique:", e)
+    return False
+
 if MOOD in CLASSIQUE:
     import json, subprocess, os
     from pathlib import Path
@@ -19,6 +47,11 @@ if MOOD in CLASSIQUE:
     here = Path(__file__).resolve().parent / "musique"
     src = here / f"{MOOD}.ogg"
     cr = json.load(open(here / "credits.json")).get(MOOD, {})
+    if MOOD in NOUVELLES:
+        src = here / "extra" / f"{MOOD}.ogg"; cr = {"artist": NOUVELLES[MOOD][2], "licence": NOUVELLES[MOOD][3]}
+        if not telecharger(MOOD, src):  # en cas d'échec : Mozart piano, pour ne jamais bloquer la vidéo
+            MOOD, nom = "mozart_piano", CLASSIQUE["mozart_piano"][1]; src = here / "mozart_piano.ogg"
+            cr = json.load(open(here / "credits.json")).get(MOOD, {})
     fo = 4.0
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(src), "-t", str(DUR),
                     "-af", f"loudnorm=I=-18:TP=-2,afade=t=in:d=1.5,afade=t=out:st={max(DUR - fo, 0)}:d={fo}",

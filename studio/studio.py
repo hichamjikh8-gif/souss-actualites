@@ -447,6 +447,31 @@ if not MEDIA:
     raise SystemExit("Aucune image trouvée: ajoutez des photos.")
 
 # ------------------------------------------------------------------ 5. musique
+# « auto » : la mélodie est choisie selon la rubrique et le titre de l'article (au hasard dans une liste adaptée)
+if CFG.get("musique") == "auto":
+    import random
+    _txt = " ".join([CAT_FR, CFG.get("rubrique") or "", TITLE]).lower()
+    AMBIANCES = [
+        (r"décès|deces|\bmort\b|\btuée?s?\b|victime|accident|incendie|séisme|seisme|inondation|drame|tragédie|deuil|noyade|disparu|وفاة|مصرع|حادث|حريق|فيضان|زلزال|فاجعة|ضحايا|غرق",
+         ["beethoven_lune", "dvorak_largo", "chopin_nocturne"]),
+        (r"alerte|urgent|police|justice|tribunal|arrestation|sécurité|securite|enquête|enquete|alerte météo|vigilance|أمن|شرطة|محكمة|اعتقال|تحقيق|إنذار",
+         ["vivaldi_hiver", "beethoven_lune", "dvorak_largo"]),
+        (r"sport|foot|match|lions de l'atlas|botola|hassania|coupe|can 20|mondial|champion|رياضة|كرة|مباراة|المنتخب|حسنية|البطولة",
+         ["vivaldi_printemps", "handel_saba", "mozart_nachtmusik"]),
+        (r"culture|festival|patrimoine|musique|\bart\b|\barts\b|cinéma|cinema|livre|amazigh|tradition|ثقافة|مهرجان|تراث|فن|أمازيغ",
+         ["albeniz_leyenda", "tarrega_alhambra", "debussy_arabesque", "chopin_nocturne"]),
+        (r"tourisme|plage|\bmer\b|océan|ocean|nature|environnement|agricult|arganier|argan|montagne|météo|meteo|سياحة|شاطئ|بحر|طبيعة|بيئة|فلاحة|أركان|طقس",
+         ["grieg_matin", "debussy_lune", "vivaldi_printemps"]),
+        (r"économie|economie|business|investissement|entreprise|emploi|\bport\b|projet|chantier|marché|اقتصاد|استثمار|مقاولة|شغل|مشروع|أعمال",
+         ["mozart_concerto", "debussy_arabesque", "mozart_nachtmusik"]),
+        (r"politique|gouvernement|ministre|\broi\b|royal|parlement|élection|election|conseil|wali|gouverneur|international|سياسة|حكومة|وزير|الملك|برلمان|انتخابات|مجلس|دولي",
+         ["bach_air", "mozart_concerto", "dvorak_largo"]),
+    ]
+    _choix = ["mozart_piano", "mozart_romance", "debussy_lune", "grieg_matin"]
+    for _re, _liste in AMBIANCES:
+        if re.search(_re, _txt): _choix = _liste; break
+    CFG["musique"] = random.choice(_choix)
+    log("Musique automatique:", CFG["musique"])
 if CFG.get("musique", "elan") != "aucune":
     subprocess.run([sys.executable, str(HERE / "music.py"), str(OUT / "music.wav"), str(VOICE_DUR + 6.0), CFG.get("musique", "elan")], check=True)
 

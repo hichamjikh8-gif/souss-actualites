@@ -42,6 +42,13 @@ jobs:
         with:
           path: studio/models
           key: voix-kokoro-v1.0-piper-ar
+      - name: Mélodies (cache)
+        if: steps.job.outputs.dir != ''
+        uses: actions/cache@v4
+        with:
+          path: studio/musique/extra
+          key: melodies-v1-${{ github.run_id }}
+          restore-keys: melodies-v1-
       - name: Installer
         if: steps.job.outputs.dir != ''
         run: |
