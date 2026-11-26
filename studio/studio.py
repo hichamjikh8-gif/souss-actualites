@@ -681,7 +681,18 @@ def claude_hook():
         return h_ if 1 <= len(h_.split()) <= 7 else ""
     except Exception as e:
         log("Accroche indisponible:", e); return ""
+def title_hook():
+    """Sans Claude : un morceau du titre lui-même (jamais de mot inventé), coupé à une ponctuation naturelle."""
+    stop = {"de", "du", "des", "d'", "la", "le", "les", "l'", "à", "au", "aux", "et", "en", "pour", "par", "sur", "un", "une",
+            "avec", "dans", "entre", "ou", "que", "qui", "son", "sa", "ses", "leur", "leurs", "deux", "trois",
+            "في", "من", "على", "إلى", "عن", "و", "مع", "بين", "حين", "بعد", "قبل"}
+    segs_ = [x.strip() for x in re.split(r"\s*(?:[:?!…«»\"“”—–]|\.\.|,|،|؟)\s*", TITLE) if x.strip()]
+    seg = next((x for x in segs_ if len(x.split()) >= 2), TITLE)
+    ws = seg.split()[:5]
+    while len(ws) > 2 and (ws[-1].lower().strip(".,") in stop or ws[-1].lower().endswith(("'", "’"))): ws.pop()
+    return " ".join(ws).strip(" .,")
 HOOK = claude_hook()
+if not HOOK and not NEUTRAL and CFG.get("accroche") is None: HOOK = title_hook()
 log("Accroche:", HOOK or "-")
 
 # ---- Habillage « chaîne d'info » (bandeau, synthé, défilant, transitions, grain, sons) — repli sur l'ancien rendu en cas d'erreur
