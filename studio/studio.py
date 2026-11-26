@@ -523,7 +523,7 @@ if AR:
 log("Moteur texte RAQM:", RAQM)
 TITLE_SHOW = TITLE.replace("ᵉ", "e")
 OUTRO = 4.0
-INTRO = float(CFG.get("intro", 2.0))
+INTRO = float(CFG.get("intro", 0.0))  # plus de carte logo au début (demande de Hicham, 26/11/2026)
 DUR = INTRO + VOICE_DUR + OUTRO
 NF = int(DUR * FPS)
 
