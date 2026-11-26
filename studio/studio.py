@@ -124,10 +124,26 @@ def sentences(text):
     return [x.strip() for x in s if len(x.strip()) > 1]
 
 SOCIAL = None
+_SITE_IA = {}
+def site_ia():
+    """Sans clé Claude dans GitHub : le site souss-actualites.com fait le résumé + l'accroche avec sa propre clé (relit ce job lui-même)."""
+    if "r" not in _SITE_IA:
+        _SITE_IA["r"] = None
+        if not NEUTRAL:
+            try:
+                r = requests.post("https://souss-actualites.com/wp-json/sst/v1/ia", json={"job": JOB.name}, headers=UA, timeout=150)
+                d_ = r.json()
+                if r.ok and d_.get("lines"):
+                    _SITE_IA["r"] = d_; log("Résumé + accroche : Claude via le site OK")
+                else:
+                    log("Claude via le site indisponible:", r.status_code, d_.get("error") if isinstance(d_, dict) else "")
+            except Exception as e:
+                log("Claude via le site indisponible:", e)
+    return _SITE_IA["r"]
 def claude_summary():
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
-        return None
+        return site_ia()
     art = "\n\n".join(PARAS)[:20000]
     prompt = (
         ("Tu es rédacteur vidéo" + (" pour " + BRAND_NAME if BRAND_NAME else "") if NEUTRAL else "Tu es le rédacteur vidéo de Souss Actualités") + ". À partir de l'article ci-dessous, écris le texte "
@@ -664,8 +680,12 @@ def src(i):
 # ---- Accroche géante (3 à 5 mots) écrite par Claude à partir du titre et du début de l'article
 def claude_hook():
     if CFG.get("accroche") is not None: return (CFG.get("accroche") or "").strip()
+    if SOCIAL and (SOCIAL.get("accroche") or "").strip(): return SOCIAL["accroche"].strip().strip('"«»“”').rstrip(".!")
     key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key or NEUTRAL: return ""
+    if NEUTRAL: return ""
+    if not key:
+        d_ = site_ia()
+        return ((d_ or {}).get("accroche") or "").strip().strip('"«»“”').rstrip(".!")
     lang = "arabe" if AR else "français"
     prompt = (f"Écris l'accroche d'ouverture d'une vidéo TikTok d'information : 3 à 5 mots en {lang}, percutants, "
               "fidèles à l'article (aucun fait ajouté, pas d'exagération, pas de point d'exclamation, pas de guillemets, pas d'emoji). "
