@@ -10,6 +10,30 @@ until [ -f /var/www/html/index.php ] && [ -f /var/www/html/wp-config.php ]; do
 mkdir -p /var/www/html/wp-content/uploads
 chmod -R 777 /var/www/html/wp-content/uploads
 
+# Clés de sécurité WordPress persistantes : l'image Docker en tire de nouvelles au hasard à chaque
+# conteneur, ce qui déconnectait tout le monde après chaque déploiement. On garde les premières sur
+# le volume persistant et on les réinjecte ensuite. Le nom « .ht… » est bloqué par nginx
+# (location ~ /\.ht) et le fichier n'est lisible que par root.
+SA_SALTS=/var/www/html/wp-content/uploads/.htsa-salts
+if [ ! -s "$SA_SALTS" ]; then
+  grep -oE "getenv_docker\('WORDPRESS_[A-Z_]+(KEY|SALT)',[[:space:]]*'[0-9a-f]{40}'" /var/www/html/wp-config.php \
+    | sed -E "s/getenv_docker\('(WORDPRESS_[A-Z_]+)',[[:space:]]*'([0-9a-f]{40})'/\1 \2/" > "$SA_SALTS" || true
+  chmod 600 "$SA_SALTS" || true
+fi
+if [ -s "$SA_SALTS" ]; then
+  while read -r sa_name sa_val; do
+    case "$sa_name" in WORDPRESS_*) ;; *) continue ;; esac
+    case "$sa_val" in *[!0-9a-f]*|"") continue ;; esac
+    sed -i -E "s/(getenv_docker\('$sa_name',[[:space:]]*')[0-9a-f]{40}'/\1$sa_val'/" /var/www/html/wp-config.php || true
+  done < "$SA_SALTS"
+fi
+
+# Mises à jour de sécurité WordPress (même branche, ex. 7.1.3 -> 7.1.5) : le cœur vient de l'image
+# Docker et repartirait de l'ancienne version à chaque conteneur ; on l'aligne au démarrage, en
+# arrière-plan pour ne pas retarder nginx. En cas d'échec réseau, le site reste sur la version de l'image.
+( wp --allow-root --path=/var/www/html core update --minor >/dev/null 2>&1 \
+    && wp --allow-root --path=/var/www/html core update-db >/dev/null 2>&1 ) &
+
 # WP Super Cache : wp-content/advanced-cache.php, wp-content/wp-cache-config.php et la
 # constante WP_CACHE ne survivent pas a un redeploiement (seul wp-content/uploads est sur
 # un volume persistant Railway ; le reste de wp-content repart de l'image a chaque deploi).
