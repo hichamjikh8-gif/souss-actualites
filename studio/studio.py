@@ -550,7 +550,7 @@ def layout(words_):
         cur_.append((i, w, ww)); cw_ += (sp if len(cur_) > 1 else 0) + ww
     if cur_: lines_.append((cur_, cw_))
     return lines_, sp
-def text_layer(words_, hi):
+def text_layer(words_, hi, pop=0):
     lay = Image.new("RGBA", (W, 360), (0, 0, 0, 0)); d = ImageDraw.Draw(lay)
     lines_, sp = layout(words_)
     lh = 92 if AR else 80; y0 = (360 - lh * len(lines_)) // 2
@@ -562,7 +562,8 @@ def text_layer(words_, hi):
         for i, w, ww in ln:
             x = cx - ww if AR else cx
             if i == hi:
-                d.rounded_rectangle((x - 12, y - 4, x + ww + 12, y + lh - 14), radius=14, fill=ACCENT + (255,))
+                g_ = pop * 5  # « pop » : la case du mot prononcé gonfle puis se pose
+                d.rounded_rectangle((x - 12 - g_, y - 4 - g_, x + ww + 12 + g_, y + lh - 14 + g_), radius=14 + g_, fill=ACCENT + (255,))
             else:
                 T(d, (x + 2, y + 4), w, F_SUB, (0, 0, 0, 170))
             T(d, (x, y), w, F_SUB, (255, 255, 255, 255))
@@ -660,6 +661,26 @@ def src(i):
             if k < i - 1: del sources[k]
     return sources[i]
 
+# ---- Habillage « chaîne d'info » (bandeau, synthé, défilant, transitions, grain, sons) — repli sur l'ancien rendu en cas d'erreur
+HAB = None
+try:
+    sys.path.insert(0, str(HERE))
+    from habillage import Habillage, fade as _hfade, ease as _hease
+    HEADLINES = CFG.get("titres_defilants")
+    if HEADLINES is None and not NEUTRAL:
+        try:
+            _r = requests.get("https://souss-actualites.com/wp-json/wp/v2/posts", params={"per_page": 25, "_fields": "title"}, headers=UA, timeout=20)
+            _tt = [html.unescape(re.sub(r"<[^>]+>", "", p_["title"]["rendered"])).strip() for p_ in _r.json()]
+            HEADLINES = [x_ for x_ in _tt if bool(re.search(r"[\u0600-\u06FF]", x_)) == AR][:8]
+        except Exception as e:
+            log("Titres défilants indisponibles:", e); HEADLINES = []
+    HAB = Habillage(dict(W=W, H=H, FPS=FPS, AR=AR, ACCENT=ACCENT, INTRO=INTRO, DUR=DUR, TITLE=TITLE, TEXT=" ".join(PARAS),
+                         NEUTRAL=NEUTRAL, T=T, tlen=tlen, font=font, arfont=arfont, CFG=CFG, HEADLINES=HEADLINES))
+    log("Habillage:", "bandeau=" + (HAB.badge_lab if HAB._badge else "-"), "| synthé=" + (" / ".join(HAB.lower_txt) if HAB._lower else "-"),
+        "| défilant=" + ("oui" if HAB.ticker_on() else "non"))
+except Exception as e:
+    log("Habillage indisponible, rendu classique:", e); HAB = None
+
 static = Image.new("RGBA", (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(static)
 if AR:
     if not NEUTRAL or BRAND_NAME or CFG.get("rubrique"): d.rectangle((W - 82, 150, W - 70, 222), fill=ACCENT)
@@ -682,7 +703,8 @@ for _y in range(H):
     _g.putpixel((0, _y), max(0, min(255, v)))
 _shade = Image.new("RGBA", (W, H), (0, 0, 0, 0)); _shade.putalpha(_g.resize((W, H)))
 static = Image.alpha_composite(_shade, static); d = ImageDraw.Draw(static)
-url = BRAND_SITE if NEUTRAL else "souss-actualites.com"; d.text(((W - d.textlength(url, font=F_URL)) / 2, 1790), url, font=F_URL, fill=(235, 235, 235))
+url = BRAND_SITE if NEUTRAL else "souss-actualites.com"
+if not (HAB and HAB.ticker_on()): d.text(((W - d.textlength(url, font=F_URL)) / 2, 1790), url, font=F_URL, fill=(235, 235, 235))
 
 CREDITS = [c for c in CREDITS if c]
 credit_txt = "Photos : " + ("Wikimedia Commons — " + ", ".join(dict.fromkeys(CREDITS)) if CREDITS else "Souss Actualités")
@@ -818,31 +840,50 @@ if has_music:
     af += ",asplit=2[v][sc];[2:a]volume=%s[m0];[m0][sc]sidechaincompress=threshold=0.03:ratio=4:attack=30:release=400[m];[v][m]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" % CFG.get("volume_musique", 0.30)
 else:
     af += "[a]"
+XF = 0.7 if (HAB and HAB.do_trans) else 0.9
+has_sfx = False
+if HAB:
+    try:
+        _tr = [((i_ + 1) * per - XF / 2, HAB.kind(i_)) for i_ in range(len(seq) - 1) if Path(seq[i_ + 1]).suffix.lower() not in VIDEXT]
+        has_sfx = HAB.sfx(str(OUT / "sfx.wav"), DUR, _tr)
+    except Exception as e:
+        log("Effets sonores indisponibles:", e)
+if has_sfx:
+    af = af[: -len("[a]")] + "[a0];[%d:a]aformat=channel_layouts=stereo:sample_rates=44100[sx];[a0][sx]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]" % (3 if has_music else 2)
 cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-",
-       "-i", str(OUT / "voice.wav")] + (["-i", str(OUT / "music.wav")] if has_music else []) + [
+       "-i", str(OUT / "voice.wav")] + (["-i", str(OUT / "music.wav")] if has_music else []) + (["-i", str(OUT / "sfx.wav")] if has_sfx else []) + [
        "-filter_complex", af, "-map", "0:v", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-maxrate", "2M", "-bufsize", "4M",
        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", str(VIDEO)]
 ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-ci, XF, cache = 0, 0.9, {}
+ci, cache = 0, {}
 for f in range(NF):
     t = f / FPS; tv = t - INTRO
     idx = min(int(t // per), len(seq) - 1); local = t - idx * per
     fr = src(idx).frame(min(max(local / per, 0), 1), idx)
     if idx + 1 < len(seq) and local > per - XF and Path(seq[idx + 1]).suffix.lower() not in VIDEXT:
-        fr = Image.blend(fr, src(idx + 1).frame(0, idx + 1), (local - (per - XF)) / XF)
+        q_ = (local - (per - XF)) / XF; nxt_ = src(idx + 1).frame(0, idx + 1)
+        fr = HAB.transition(fr.convert("RGB"), nxt_.convert("RGB"), q_, idx) if HAB else Image.blend(fr, nxt_, q_)
     fr = fr.convert("RGBA")
+    if HAB: fr = HAB.look(fr, f)
     if t < INTRO:
         fr = intro(fr, t)
         if t > INTRO - 0.45: fr = Image.alpha_composite(fr, fade(static, ease((t - (INTRO - 0.45)) / 0.45)))
     else:
         fr = Image.alpha_composite(fr, static)
+    if HAB: fr = HAB.overlay(fr, t, tv)
     while ci < len(chunks) - 1 and tv > chunks[ci + 1][0][0] - 0.02: ci += 1
     c = chunks[ci] if chunks else None
     if c and c[0][0] - 0.05 <= tv <= c[-1][1] + 0.6:
         hi = max([k for k, w_ in enumerate(c) if w_[0] <= tv] or [0])
-        key = (ci, hi)
-        if key not in cache: cache = {key: text_layer([w_[2] for w_ in c], hi)}
-        fr.alpha_composite(cache[key], (0, 1300))
+        pop = 0
+        if HAB:
+            dtw = tv - c[hi][0]; pop = 3 if dtw < 0.04 else 2 if dtw < 0.08 else 1 if dtw < 0.12 else 0
+        key = (ci, hi, pop)
+        if key not in cache: cache = {key: text_layer([w_[2] for w_ in c], hi, pop)}
+        lay_, dy_ = cache[key], 0
+        if HAB and tv - c[0][0] < 0.18:  # la ligne de sous-titres monte et apparaît
+            e_ = _hease(max(tv - c[0][0], 0) / 0.18); lay_ = _hfade(lay_, e_); dy_ = int(28 * (1 - e_))
+        fr.alpha_composite(lay_, (0, 1300 + dy_))
     dr = ImageDraw.Draw(fr)
     dr.rectangle((70, 1760, W - 70, 1766), fill=(85, 85, 85))
     dr.rectangle((70, 1760, 70 + (W - 140) * min(t / DUR, 1), 1766), fill=ACCENT)
