@@ -50,6 +50,7 @@ class Habillage:
         self.W, self.H, self.AR, self.ACC = ctx["W"], ctx["H"], ctx["AR"], ctx["ACCENT"]
         cfg = (ctx["CFG"].get("habillage") or {})
         on = lambda k, d=True: cfg.get(k, d) is not False
+        self._on = on
         neutral = ctx["NEUTRAL"]
         self.do_badge = on("bandeau") and not neutral
         self.do_lower = on("synthe") and not neutral
@@ -144,6 +145,33 @@ class Habillage:
                 tab = Image.new("RGBA", (lw, 66), self.ACC + (255,)); dt = ImageDraw.Draw(tab)
                 self._txt(dt, (25, 10 if not AR else 4), lab, fl, (255, 255, 255, 255))
                 self._ticker = (strip, tab, tw)
+        # 3b) accroche géante (3 à 5 mots) : visible dès la première image, qui sert de couverture TikTok
+        self._hook = None
+        hook = (c.get("HOOK") or "").strip()
+        if hook and self._on("accroche"):
+            import textwrap
+            hook = hook if AR else hook.upper()
+            fh = c["arfont"](104) if AR else c["font"]("Inter-Black.otf", 100)
+            words, lines, cur = hook.split(), [], ""
+            for w in words:
+                t_ = (cur + " " + w).strip()
+                if cur and self._w(tmp, t_, fh) > 860: lines.append(cur); cur = w
+                else: cur = t_
+            if cur: lines.append(cur)
+            lines = lines[:3]
+            lh = 156 if AR else 138; pad = 34; bh = lh - 14
+            kw = {"direction": "rtl", "language": "ar"} if AR else {}
+            im = Image.new("RGBA", (W, lh * len(lines) + 20), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+            for i, ln in enumerate(lines):
+                lw = self._w(d, ln, fh); x = (W - lw) / 2; y = i * lh
+                try:  # centrage vertical sur les vraies limites des lettres (l'arabe a des hampes plus hautes)
+                    bb = d.textbbox((0, 0), ln, font=fh, **kw); ty = y + bh / 2 - (bb[1] + bb[3]) / 2
+                except Exception:
+                    ty = y + 14
+                col = self.ACC if i % 2 == 0 else (255, 255, 255)
+                d.rectangle((x - pad, y, x + lw + pad, y + bh), fill=col + (255,))
+                self._txt(d, (x, ty), ln, fh, (255, 255, 255, 255) if i % 2 == 0 else (16, 16, 18, 255))
+            self._hook = im
         # 4) vignettage + grain
         if self.do_look:
             yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -197,13 +225,16 @@ class Habillage:
         W, H, AR = self.W, self.H, self.AR
         INTRO, DUR = self.c["INTRO"], self.c["DUR"]
         end = DUR - 4.0
-        # flash d'ouverture
-        if 0 <= tv < 0.3 and self.do_badge:
-            fr.alpha_composite(Image.new("RGBA", (W, H), (255, 255, 255, int(70 * (1 - tv / 0.3)))))
+        # accroche géante : pleine dès l'image 0 (couverture), léger zoom, puis s'efface
+        if self._hook is not None and 0 <= tv < 2.3:
+            im = self._hook; k = 1 + 0.05 * ease(tv / 2.3)
+            if tv > 1.9: im = fade(im, 1 - ease((tv - 1.9) / 0.4))
+            if k > 1.001: im = im.resize((int(im.width * k), int(im.height * k)), Image.BILINEAR)
+            fr.alpha_composite(im, (int((W - im.width) / 2), int(900 - im.height / 2)))
         # bandeau d'accroche : pop, puis point qui pulse
         if self._badge is not None and 0 <= tv and t < end:
             im = self._badge
-            s = max(0.05, back_out(tv / 0.4))
+            s = 1.0
             if t > end - 0.4: s *= ease((end - t) / 0.4)
             bw, bh = max(1, int(im.width * s)), max(1, int(im.height * s))
             x = 70 + (im.width - bw) // 2 if AR else W - 70 - im.width + (im.width - bw) // 2
@@ -214,10 +245,10 @@ class Habillage:
                 p = 0.5 + 0.5 * math.sin(tv * 2 * math.pi * 1.2)
                 cx = (x + bw - 28) if AR else (x + 28); cy = y + bh / 2; rr = 7 + 3 * p
                 d.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), fill=(255, 255, 255, int(150 + 105 * p)))
-        # synthé ville + date (entre à 0,6 s, sort à 7 s)
-        if self._lower is not None and 0.6 <= tv <= 7.4:
+        # synthé ville + date (entre après l'accroche, reste ~6 s)
+        if self._lower is not None and 2.3 <= tv <= 9.1:
             im = self._lower
-            p_in, p_out = ease_out((tv - 0.6) / 0.45), ease((tv - 6.9) / 0.5)
+            p_in, p_out = ease_out((tv - 2.3) / 0.45), ease((tv - 8.6) / 0.5)
             k = p_in * (1 - p_out)
             if k > 0.01:
                 if AR:
@@ -278,7 +309,7 @@ class Habillage:
             if k != "fondu":
                 w = whoosh(0.5 if k == "glisse" else 0.42, 0.20 if k != "flash" else 0.15)
                 put(w, tc - len(w) / sr / 2)
-        if self.do_lower: put(whoosh(0.35, 0.10), self.c["INTRO"] + 0.6)
+        if self.do_lower: put(whoosh(0.35, 0.10), self.c["INTRO"] + 2.3)
         if not out.any(): return False
         sf.write(path, np.stack([out, out], 1), sr)
         return True

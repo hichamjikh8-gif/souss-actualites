@@ -55,7 +55,8 @@ def publish(d):
     key, secret = os.environ.get("DM_API_KEY", "").strip(), os.environ.get("DM_API_SECRET", "").strip()
     if not key or not secret:
         return {"ok": False, "error": "Clés Dailymotion absentes dans GitHub."}
-    vids = glob.glob(os.path.join(d, "*.mp4"))
+    # Dailymotion : la version horizontale 16:9 passe en priorité (format le mieux diffusé et monétisé)
+    vids = sorted(glob.glob(os.path.join(d, "*.mp4")), key=lambda v: 0 if v.endswith("-16x9.mp4") else 1)
     res_f = os.path.join(d, "result.json")
     if not vids:
         return {"ok": False, "error": "Vidéo introuvable."}

@@ -661,6 +661,29 @@ def src(i):
             if k < i - 1: del sources[k]
     return sources[i]
 
+# ---- Accroche géante (3 à 5 mots) écrite par Claude à partir du titre et du début de l'article
+def claude_hook():
+    if CFG.get("accroche") is not None: return (CFG.get("accroche") or "").strip()
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key or NEUTRAL: return ""
+    lang = "arabe" if AR else "français"
+    prompt = (f"Écris l'accroche d'ouverture d'une vidéo TikTok d'information : 3 à 5 mots en {lang}, percutants, "
+              "fidèles à l'article (aucun fait ajouté, pas d'exagération, pas de point d'exclamation, pas de guillemets, pas d'emoji). "
+              "Si c'est une déclaration ou une hypothèse, ne la présente pas comme un fait. Réponds avec l'accroche seule.\n\n"
+              f"TITRE : {TITLE}\n\nDÉBUT DE L'ARTICLE : {' '.join(PARAS)[:1500]}")
+    try:
+        r = requests.post("https://api.anthropic.com/v1/messages", timeout=60, headers={
+            "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={"model": os.environ.get("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 60,
+                  "messages": [{"role": "user", "content": prompt}]})
+        h_ = r.json()["content"][0]["text"].strip().strip('"«»“”').strip()
+        h_ = re.sub(r"\s+", " ", h_.splitlines()[0]).rstrip(".!")
+        return h_ if 1 <= len(h_.split()) <= 7 else ""
+    except Exception as e:
+        log("Accroche indisponible:", e); return ""
+HOOK = claude_hook()
+log("Accroche:", HOOK or "-")
+
 # ---- Habillage « chaîne d'info » (bandeau, synthé, défilant, transitions, grain, sons) — repli sur l'ancien rendu en cas d'erreur
 HAB = None
 try:
@@ -675,7 +698,7 @@ try:
         except Exception as e:
             log("Titres défilants indisponibles:", e); HEADLINES = []
     HAB = Habillage(dict(W=W, H=H, FPS=FPS, AR=AR, ACCENT=ACCENT, INTRO=INTRO, DUR=DUR, TITLE=TITLE, TEXT=" ".join(PARAS),
-                         NEUTRAL=NEUTRAL, T=T, tlen=tlen, font=font, arfont=arfont, CFG=CFG, HEADLINES=HEADLINES))
+                         NEUTRAL=NEUTRAL, T=T, tlen=tlen, font=font, arfont=arfont, CFG=CFG, HEADLINES=HEADLINES, HOOK=HOOK))
     log("Habillage:", "bandeau=" + (HAB.badge_lab if HAB._badge else "-"), "| synthé=" + (" / ".join(HAB.lower_txt) if HAB._lower else "-"),
         "| défilant=" + ("oui" if HAB.ticker_on() else "non"))
 except Exception as e:
@@ -891,7 +914,58 @@ for f in range(NF):
     if t > DUR - OUTRO: fr = outro(fr, min((t - (DUR - OUTRO)) / 0.8, 1))
     ff.stdin.write(fr.convert("RGB").tobytes())
 ff.stdin.close(); ff.wait()
-subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "2", "-i", str(VIDEO), "-frames:v", "1", "-vf", "scale=540:-1", str(OUT / "miniature.jpg")])
+subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "0.3" if HOOK else "2", "-i", str(VIDEO), "-frames:v", "1", "-vf", "scale=540:-1", str(OUT / "miniature.jpg")])
+# ---- Version horizontale 16:9 (YouTube / Dailymotion) : la vidéo verticale au centre-droit, panneau de marque à côté
+if CFG.get("horizontal", True) is not False:
+    try:
+        HW, HH = 1920, 1080
+        fgw = int(W * HH / H) // 2 * 2
+        fx = (HW - fgw - 150) if not AR else 150
+        pan = Image.new("RGBA", (HW, HH), (0, 0, 0, 0)); dp = ImageDraw.Draw(pan)
+        px0, px1 = (110, fx - 90) if not AR else (fx + fgw + 90, HW - 110)
+        pw = px1 - px0
+        y = 170
+        if LOGO.exists() and not NEUTRAL:
+            lg = Image.open(LOGO).convert("RGBA"); lg.thumbnail((420, 200), Image.LANCZOS)
+            card = Image.new("RGBA", (lg.width + 44, lg.height + 36), (0, 0, 0, 0))
+            ImageDraw.Draw(card).rounded_rectangle((0, 0, card.width - 1, card.height - 1), radius=20, fill=(255, 255, 255, 255))
+            card.alpha_composite(lg, (22, 18)); pan.alpha_composite(card, (px0 if not AR else px1 - card.width, y)); y += card.height + 50
+        elif NEUTRAL and BRAND_NAME:
+            fb_ = arfont(80) if re.search(r"[\u0600-\u06FF]", BRAND_NAME) else font("Inter-Black.otf", 72)
+            T(dp, (px0 if not AR else px1 - tlen(dp, BRAND_NAME, fb_), y), BRAND_NAME, fb_, (255, 255, 255, 255)); y += 130
+        kt_ = (CFG.get("rubrique") or "") if AR else (CFG.get("rubrique") or "").upper()
+        if kt_:
+            fk = arfont(40) if AR else font("Inter-Bold.otf", 36); kw_ = tlen(dp, kt_, fk) + 60
+            x0 = px0 if not AR else px1 - kw_
+            dp.rounded_rectangle((x0, y, x0 + kw_, y + 66), radius=33, fill=ACCENT + (255,))
+            T(dp, (x0 + 30, y + (10 if not AR else 4)), kt_, fk, (255, 255, 255, 255)); y += 110
+        ftt = arfont(66, True) if AR else font("Lora-Variable.ttf", 64, 700)
+        lines_h, cur_ = [], ""
+        for w_ in TITLE_SHOW.split():
+            t_ = (cur_ + " " + w_).strip()
+            if cur_ and tlen(dp, t_, ftt) > pw: lines_h.append(cur_); cur_ = w_
+            else: cur_ = t_
+        if cur_: lines_h.append(cur_)
+        for l in lines_h[:5]:
+            x_ = px0 if not AR else px1 - tlen(dp, l, ftt)
+            T(dp, (x_ + 3, y + 3), l, ftt, (0, 0, 0, 180)); T(dp, (x_, y), l, ftt, (255, 255, 255, 255)); y += 86 if AR else 80
+        site_ = BRAND_SITE if NEUTRAL else "souss-actualites.com"
+        if site_:
+            fs_ = font("Inter-SemiBold.otf", 38)
+            dp.rectangle((px0 if not AR else px1 - 90, HH - 168, (px0 + 90) if not AR else px1, HH - 160), fill=ACCENT + (255,))
+            T(dp, (px0 if not AR else px1 - tlen(dp, site_, fs_), HH - 140), site_, fs_, (235, 235, 235, 255))
+        HDIR = OUT / "horizontal"; HDIR.mkdir(exist_ok=True)
+        pan.save(HDIR / "panneau.png")
+        HVIDEO = HDIR / (VIDEO.stem + "-16x9.mp4")
+        fc = (f"[0:v]split[a][b];[a]scale={HW}:-2,crop={HW}:{HH},boxblur=40:4,eq=brightness=-0.32:saturation=0.8[bg];"
+              f"[b]scale={fgw}:{HH}[fg];[bg][fg]overlay={fx}:0[v1];[v1][1:v]overlay=0:0,format=yuv420p[v]")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(VIDEO), "-i", str(HDIR / "panneau.png"), "-filter_complex", fc,
+                        "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "24", "-c:a", "copy",
+                        "-movflags", "+faststart", str(HVIDEO)], check=True)
+        (HDIR / "panneau.png").unlink()
+        log("Version horizontale:", HVIDEO.name)
+    except Exception as e:
+        log("Version horizontale impossible:", e)
 # ---- Miniature YouTube 1280x720
 try:
     TW, TH = 1280, 720

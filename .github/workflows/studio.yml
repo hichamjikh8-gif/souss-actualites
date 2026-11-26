@@ -80,6 +80,8 @@ jobs:
           PY
             gh release create "job-$ID" $D/*.mp4 $D/miniature.jpg $D/description.txt $D/result.json $(ls $D/miniature_youtube.jpg 2>/dev/null) \
               --target videos --title "Vidéo $ID" --notes-file $D/description.txt --prerelease
+            # version horizontale ajoutée après coup : la verticale reste le premier .mp4 de la release (celui que lit le Studio)
+            if ls $D/horizontal/*.mp4 >/dev/null 2>&1; then gh release upload "job-$ID" $D/horizontal/*.mp4 || true; fi
           fi
           # Retour vers Telegram si la demande vient du bot
           python3 - "${{ steps.job.outputs.dir }}" <<'PY'
