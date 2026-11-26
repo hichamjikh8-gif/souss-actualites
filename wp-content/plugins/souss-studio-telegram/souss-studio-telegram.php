@@ -13,6 +13,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 define( 'SST_REPO', 'hichamjikh8-gif/souss-actualites' );
 define( 'SST_BRANCH', 'videos' );
 
+// Résumé + accroche des vidéos avec la clé Claude du site (voir ia.php).
+if ( file_exists( __DIR__ . '/ia.php' ) ) {
+	require_once __DIR__ . '/ia.php';
+}
+
 /* -------------------------------------------------------------------------
  * Réglages (Réglages → Studio vidéo Telegram)
  * ---------------------------------------------------------------------- */
