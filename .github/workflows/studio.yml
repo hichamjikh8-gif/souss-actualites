@@ -77,7 +77,20 @@ jobs:
                            headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"]},
                            json={"message": f"Vidéo {i}", "branch": "videos", "content": base64.b64encode(open(f, "rb").read()).decode()})
           print("copie raw:", r.status_code)
+          open("/tmp/raw_ok", "w").write("1" if r.status_code in (200, 201) else "0")
           PY
+            # Gros fichiers (> ~30 Mo) : l'API « contents » refuse (403). On passe alors par un vrai commit git,
+            # sinon le Studio ne peut pas charger la vidéo (pas de CORS sur les fichiers de release).
+            if [ "$(cat /tmp/raw_ok 2>/dev/null)" != "1" ]; then
+              F=$(readlink -f "$(ls $D/*.mp4 | head -1)"); T=$(mktemp -d)
+              git clone -q --depth 1 --filter=blob:none --no-checkout --branch videos "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$T" \
+                && ( cd "$T" && git sparse-checkout set --no-cone "/sorties/$ID/" && git checkout -q videos \
+                     && mkdir -p "sorties/$ID" && cp "$F" "sorties/$ID/" \
+                     && git -c user.name="studio" -c user.email="studio@users.noreply.github.com" add "sorties/$ID" \
+                     && git -c user.name="studio" -c user.email="studio@users.noreply.github.com" commit -q -m "Vidéo $ID" \
+                     && for n in 1 2 3; do git push -q origin HEAD:videos && echo "copie raw (git): ok" && break; git pull -q --rebase origin videos; done ) \
+                || echo "copie raw (git): échec"
+            fi
             gh release create "job-$ID" $D/*.mp4 $D/miniature.jpg $D/description.txt $D/result.json $(ls $D/miniature_youtube.jpg 2>/dev/null) \
               --target videos --title "Vidéo $ID" --notes-file $D/description.txt --prerelease
             # version horizontale ajoutée après coup : la verticale reste le premier .mp4 de la release (celui que lit le Studio)
